@@ -1,0 +1,159 @@
+/*
+ * Display-only photo rotation.
+ *
+ * Some screenshots (notably VRChat phone-camera portraits) are saved as
+ * 1920x1080 pixels with the scene rotated 90° and no EXIF orientation tag.
+ * Rotating the bitmap itself would mean rewriting or duplicating originals, so
+ * the album stores a `rotation` value and rotates the rendered <img> instead.
+ *
+ * Sizing uses container query units: the media box establishes a size
+ * container, and a 90°/270° image is laid out with width/height swapped before
+ * the transform. After rotation its visual box exactly matches the frame, so
+ * `object-fit: cover` still crops correctly for cards and the detail view can
+ * use `object-fit: contain` to show the whole photo.
+ */
+
+.photo-card__media,
+.feature-card__media,
+.detail-media {
+  container-type: size;
+}
+
+/* ---------------------------------------------------------------- *
+ * Timeline / gallery / sheet cards
+ * ---------------------------------------------------------------- */
+.photo-card--rotate-90 .photo-card__media img,
+.photo-card--rotate-270 .photo-card__media img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100cqh;
+  height: 100cqw;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.photo-card--rotate-270 .photo-card__media img {
+  transform: translate(-50%, -50%) rotate(270deg);
+}
+
+.photo-card--rotate-180 .photo-card__media img {
+  transform: rotate(180deg);
+}
+
+/* Keep the rotation while hovering (the base hover rule only scales). */
+.photo-card--rotate-90:hover .photo-card__media img {
+  transform: translate(-50%, -50%) rotate(90deg) scale(1.045);
+}
+
+.photo-card--rotate-270:hover .photo-card__media img {
+  transform: translate(-50%, -50%) rotate(270deg) scale(1.045);
+}
+
+.photo-card--rotate-180:hover .photo-card__media img {
+  transform: rotate(180deg) scale(1.045);
+}
+
+/* ---------------------------------------------------------------- *
+ * Hero featured card
+ * ---------------------------------------------------------------- */
+.feature-card--rotate-90 .feature-card__media img,
+.feature-card--rotate-270 .feature-card__media img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100cqh;
+  height: 100cqw;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.feature-card--rotate-270 .feature-card__media img {
+  transform: translate(-50%, -50%) rotate(270deg);
+}
+
+.feature-card--rotate-180 .feature-card__media img {
+  transform: rotate(180deg);
+}
+
+.feature-card--rotate-90:hover .feature-card__media img {
+  transform: translate(-50%, -50%) rotate(90deg) scale(1.045);
+}
+
+.feature-card--rotate-270:hover .feature-card__media img {
+  transform: translate(-50%, -50%) rotate(270deg) scale(1.045);
+}
+
+.feature-card--rotate-180:hover .feature-card__media img {
+  transform: rotate(180deg) scale(1.045);
+}
+
+/* ---------------------------------------------------------------- *
+ * Photo detail
+ * ---------------------------------------------------------------- */
+.detail-media--rotate-90 .detail-media__image,
+.detail-media--rotate-270 .detail-media__image {
+  position: absolute;
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 100cqh;
+  height: 100cqw;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  object-fit: contain;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.detail-media--rotate-270 .detail-media__image {
+  transform: translate(-50%, -50%) rotate(270deg);
+}
+
+.detail-media--rotate-180 .detail-media__image {
+  transform: rotate(180deg);
+}
+
+/* Orientation editor */
+.detail-orientation {
+  padding: 20px 0 4px;
+  border-top: 1px solid var(--line);
+}
+
+.detail-orientation__state {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.detail-orientation__hint {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--faint);
+}
+
+.detail-orientation__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}

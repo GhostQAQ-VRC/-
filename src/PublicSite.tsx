@@ -19,6 +19,7 @@ import { UploadDialog } from './components/UploadDialog';
 import { PhotoDetailDialog } from './components/PhotoDetailDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { AppearancePanel } from './components/AppearancePanel';
+import { rotatePhoto } from './utils/orientation';
 
 interface PublicSiteProps {
   album: AlbumApi;
@@ -188,6 +189,16 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
     [album.setFeaturedPhoto, pushToast],
   );
 
+  const handleRotatePhoto = useCallback(
+    (id: string, delta: -90 | 90) => {
+      const photo = photosRef.current.find((item) => item.id === id);
+      if (!photo) return;
+      const next = rotatePhoto(photo.rotation, delta);
+      album.updatePhoto(id, { rotation: next === 0 ? undefined : next });
+    },
+    [album.updatePhoto],
+  );
+
   const handleUploadAdd = (draft: PhotoDraft) => {
     album.addPhoto(draft);
     setFilters(DEFAULT_FILTERS);
@@ -321,6 +332,7 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
                   groups={groups}
                   featuredPhotoId={album.settings.featuredPhotoId}
                   onTogglePin={handleTogglePin}
+                  onRotatePhoto={handleRotatePhoto}
                   onOpenPhoto={openPhoto}
                   onRequestDelete={requestPhotoDelete}
                   onUpload={openUpload}

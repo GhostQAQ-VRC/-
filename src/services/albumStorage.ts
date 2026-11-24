@@ -7,6 +7,7 @@ import type {
   Photo,
   PhotoMediaKind,
   PhotoMetaSource,
+  PhotoRotation,
   PhotoSyncState,
   WorldInfo,
   WorldLibraryEntry,
@@ -161,6 +162,10 @@ export function sanitizePhoto(value: unknown, legacy = false): Photo | null {
         .map((tag) => tag.trim().slice(0, 24))
         .slice(0, 12)
     : undefined;
+  const rotation: PhotoRotation | undefined =
+    raw.rotation === 90 || raw.rotation === 180 || raw.rotation === 270
+      ? raw.rotation
+      : undefined;
   return {
     id: raw.id,
     src: raw.src,
@@ -186,6 +191,7 @@ export function sanitizePhoto(value: unknown, legacy = false): Photo | null {
       raw.worldIdSource === 'manual'
         ? raw.worldIdSource
         : undefined,
+    rotation,
     mediaKind,
     libraryPath,
     previewPath: asString(raw.previewPath)?.replace(/\\/g, '/'),

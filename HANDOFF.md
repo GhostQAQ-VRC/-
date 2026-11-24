@@ -11,9 +11,10 @@
 
 - **视频背景**：背景特效新增「视频背景」。导入 MP4 / WebM / MOV 等常见视频，客户端自动判断是否需要压缩；体积大或容器不友好时在渲染层用 Canvas + MediaRecorder 重编码为 VP9/VP8 WebM，**去除音轨（画面无损）**、长边限制 1920px、按目标体积选择最高码率，必要时二次降码率；客户端存 `<库>/.hoshikuzu/backgrounds/<sha1>.webm` 并通过 `hoshikuzu-media://background/` 播放，网页版存 IndexedDB。首帧 poster 随设置保存，视频解码前/失败时显示。
 - **照片横竖识别**：新增 `PhotoOrientation` 与 `utils/orientation.ts`，用 `width/height`（扫描时已按 EXIF 旋转）区分 portrait / landscape / square。时间轴卡片、画廊、密排相册、首页精选卡片都按方向使用 3:4 / 4:3 / 1:1 画框；竖图卡片会收窄并靠近中轴，不再统一裁成 4:3。
+- **方向校正（1.0.1）**：部分手机竖拍 / VRChat 手机相机截图会把竖画面以 1920×1080 横向像素保存，且没有 EXIF 标记，无法仅凭宽高自动判断。`Photo.rotation`（0/90/180/270）记录仅显示的旋转，卡片悬浮操作可一键向左 90°，详情页「照片方向」可左右旋转/重置；旋转后宽高自动交换并按竖图显示，原图字节不变。卡片/首页/详情使用容器查询单位旋转 `<img>`，不生成新原图。
 - **网络代理管理**：管理台 → 站点设置新增「网络代理」。模式：跟随系统 / 不使用 / HTTP / SOCKS5 / PAC / 自定义规则，可设置绕过地址、测试连通性。代理同时应用到默认会话与 VRChat 专用持久会话；测试后自动恢复已保存配置。
 - **VRChat 官方世界封面**：世界资料库新增「从 VRChat 拉取世界封面」。登录官方账号（支持 TOTP / 邮箱 2FA）后批量读取所有有效 `wrld_…` 的名称、作者、简介、人数与封面；封面压缩为 512px WebP data URL 写回 `WorldLibraryEntry.thumbnail`，离线可显示。密码可选 safeStorage 记住，登出清除。
-- **验证**：`npm run build` 通过；`npm run test:desktop` **33 项通过**（新增 5 项代理规则映射）；`npm run desktop:smoke` 通过，新增横竖卡片断言、视频背景 IPC + `hoshikuzu-media://background` 200、代理 6 模式应用/恢复、世界资料库官方面板渲染与 `03f-worlds.png` / `01b-timeline.png` 截图；`npm run desktop:pack` 重新生成 `release/win-unpacked`，打包版以 `HOSHIKUZU_SMOKE=1` 启动同样通过（exit 0）。
+- **验证**：`npm run build` 通过；`npm run test:desktop` **33 项通过**（新增 5 项代理规则映射）；`npm run desktop:smoke` 通过，新增横竖卡片断言、**横躺竖拍样张旋转断言（卡片 + 详情）**、视频背景 IPC + `hoshikuzu-media://background` 200、代理 6 模式应用/恢复、世界资料库官方面板渲染与 `01c-rotation.png` / `01d-rotation-detail.png` / `03f-worlds.png` / `01b-timeline.png` 截图；`npm run desktop:pack` 重新生成 `release/win-unpacked`，打包版以 `HOSHIKUZU_SMOKE=1` 启动同样通过（exit 0）。
 - **接手顺序**：第 2 节恢复命令 → 第 4 节存储库/配置 → 第 8 节验证状态 → 第 10 节改动约束。默认外观「暮色紫 · 星轨交错 · 星轨」不要破坏。
 
 ---
@@ -31,12 +32,12 @@
 - 客户端网络：**网络代理管理（系统/直连/HTTP/SOCKS5/PAC/自定义）** + **VRChat 官方世界封面拉取**
 - 客户端云同步：**云盘日期文件夹同步 / 网站数据同步**
 - 背景：**9 种**（新增循环视频背景；银河黑洞为实验性背景，默认隐藏）
-- 照片卡片：**按原图横竖方向自适应画框**（3:4 / 4:3 / 1:1）
+- 照片卡片：**按原图横竖方向自适应画框**（3:4 / 4:3 / 1:1）；**横躺竖拍可一键旋转校正并持久化**
 - 默认外观：**暮色紫 · 星轨交错 · 星轨**（7 主题 × 4 布局）
 - `npm run build` 已通过；`npm run test:desktop` **33 项通过**
-- 客户端冒烟已通过（含横竖卡片、视频背景 IPC/协议、代理模式、世界资料库官方面板）；`release/win-unpacked` 已用本轮代码重新打包并启动冒烟通过；NSIS + 便携版已重新生成并上传到 GitHub Release `v1.0.0`
+- 客户端冒烟已通过（含横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、世界资料库官方面板）；`release/win-unpacked` 已用 1.0.1 代码重新打包并启动冒烟通过；NSIS + 便携版已重新生成并上传到 GitHub Release `v1.0.1`
 - GitHub 仓库：<https://github.com/GhostQAQ-VRC/->
-- Release 下载：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.0>
+- Release 下载：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.1>
   - `VRchat-Timeline-Album-1.0.0-x64-setup.exe`（NSIS，约 107MB，未签名）
   - `VRchat-Timeline-Album-1.0.0-portable.exe`（便携版，约 99MB）
 
@@ -80,6 +81,7 @@ npm run library:cli -- scan <文件夹>          # 独立 CLI
 - 7 套主题 + 4 种布局 + 9 种动态背景，公开站头部「外观」入口
 - 动态背景：星轨、雨幕（玻璃水滴滑落）、亚克力、樱吹雪、极光、萤火、自定义图片、循环视频；实验性银河黑洞（WebGL）需在管理台开启后显示
 - 照片横竖识别：按 `width/height` 区分 portrait / landscape / square，时间轴、画廊、密排、首页精选按 3:4 / 4:3 / 1:1 显示；竖图卡片收窄并靠近中轴
+- **照片方向校正**：卡片悬浮「向左旋转 90°」；详情页「照片方向」支持向左/向右旋转与重置；旋转只改显示、不改原图，随相册保存
 - 空相册、无结果、存储受限、图片加载失败占位
 
 ### 管理台
@@ -117,6 +119,7 @@ npm run library:cli -- scan <文件夹>          # 独立 CLI
   - 动态背景：星轨 / 雨幕 / 亚克力 / 樱吹雪 / 极光 / 萤火 / 自定义图片 / 循环视频；银河黑洞为实验性 WebGL 背景，默认隐藏
   - **视频背景**：MP4 / WebM / MOV 等；≤24MB 且网页格式直接使用，否则 Canvas + MediaRecorder 重编码 VP9/VP8 WebM（去音轨、长边 1920、按目标体积选最高码率、必要时二次压缩）；客户端写 `<库>/.hoshikuzu/backgrounds/<sha1>.webm`，网页写 IndexedDB，首帧 poster 随设置保存
   - **照片横竖识别**：扫描已按 EXIF 旋转的 width/height → portrait / landscape / square；卡片与首页精选使用 3:4 / 4:3 / 1:1
+  - **照片方向校正**：`Photo.rotation`（0/90/180/270）仅影响显示；卡片一键向左 90°，详情页左右旋转/重置；旋转后宽高交换并自动切换画框，原图不改
   - **网络代理**：系统 / 直连 / HTTP / SOCKS5 / PAC / 自定义 + 绕过地址 + 测试；应用到默认会话与 `persist:hoshikuzu-vrchat`
   - **VRChat 官方资料**：登录（TOTP/邮箱 2FA）、批量拉取全部 World ID 的名称/作者/简介/人数/封面、512px WebP 入库、可取消、密码可选 safeStorage 记住
   - 实验性背景：设置页开关，默认关闭；关闭时黑洞选项隐藏，若正在使用则回退星轨
@@ -146,7 +149,7 @@ npm run library:cli -- scan <文件夹>          # 独立 CLI
 
 `hoshikuzu-library.json` 顶层：`format: hoshikuzu-library`、`version: 1`、`library`、`album`（AlbumData v2）、`sync`。`library` 新增：`thumbnailDir`、`thumbnailsConfigured`、`previewPreset`、`previewQuality`、`imageLoadingMode`（`realtime` / `predictive` / `preload`）；`previewMaxEdge` 仍保留用于兼容。
 
-`Photo` 新增可选字段：`mediaKind`、`libraryPath`、`previewPath`、`fileBytes`、`contentHash`、`metaSource`、`worldInstanceId`、`worldIdSource`（`scan` / `ai` / `manual`）、`missing`、`managedCopy`、`syncState`；AI 总结字段：`aiSummary`、`aiTags`、`aiModel`、`aiUpdatedAt`、`aiState`、`aiError`。
+`Photo` 新增可选字段：`mediaKind`、`libraryPath`、`previewPath`、`fileBytes`、`contentHash`、`metaSource`、`worldInstanceId`、`worldIdSource`（`scan` / `ai` / `manual`）、`rotation`（`0` / `90` / `180` / `270`，仅显示旋转）、`missing`、`managedCopy`、`syncState`；AI 总结字段：`aiSummary`、`aiTags`、`aiModel`、`aiUpdatedAt`、`aiState`、`aiError`。
 
 `AlbumSettings` 新增：`backgroundEffect`（9 种，含 `video`）、`experimentalEffects`（实验性背景开关，默认 `false`）、`customBackgroundSrc`、`customBackgroundName`（上传背景压缩后的 data URL，随相册/备份保存）、`customVideoKey`（客户端为 `.hoshikuzu/backgrounds/` 文件名，网页为 IndexedDB key）、`customVideoName`、`customVideoPoster`（首帧 JPEG data URL）、`customVideoMime`、`customVideoBytes`、`customVideoWidth/Height`。
 
@@ -306,6 +309,7 @@ electron-builder.yml
 21. **视频背景 / 横竖识别 / 代理 / VRChat 官方封面（本轮）**：
    - 视频背景：`BackgroundEffectId` 新增 `video`；`services/videoBackground.ts` 探测、截首帧 poster、MediaRecorder VP9/VP8 重编码（去音轨、长边 1920、按目标体积选码率、>36MB 时 65% 码率二次压缩）；`backgroundVideoStore.ts` 用 IndexedDB 存网页版；桌面新增 `background:save-video` / `background:delete-video` IPC 与 `hoshikuzu-media://background/<sha1>.webm|mp4` 协议；`VideoBackground.tsx` 负责播放与失败/poster 回退；`BackgroundEffectPicker` 增加视频卡片、压缩进度与取消。
    - 横竖识别：`utils/orientation.ts` 按 `width/height` 判定 portrait/landscape/square；`PhotoCard` 输出 `photo-card--*`，`Hero` 输出 `feature-card--*`；timeline/layouts/hero CSS 分别使用 3:4、4:3、1:1 画框，竖图卡片收窄并靠中轴；扫描器原本已按 EXIF 旋转并记录尺寸，无需改库。
+   - 方向校正（1.0.1）：`Photo.rotation` 与 `photoRotation/orientedDimensions/rotatePhoto`；卡片 `photo-card--rotate-*` + 一键向左 90°，`Hero` `feature-card--rotate-*`，详情 `detail-media--rotate-*` + 「照片方向」左右旋转/重置。`styles/orientation.css` 用 `container-type: size` + `cqw/cqh` 交换图片宽高后再 `rotate()`，卡片保持 `object-fit: cover`，详情用 `contain` 完整显示；原图字节不变，旋转随相册/备份保存。
    - 网络代理：`proxy-config.cjs` 纯规则映射（单测覆盖 6 模式）；`network.cjs` 应用 `setProxy` 到默认会话与 `persist:hoshikuzu-vrchat`，`closeAllConnections` 使切换即时生效；`ipc/network.cjs` 提供 get/set/test IPC，测试后恢复已保存配置；`NetworkPanel.tsx` 提供模式、地址、绕过与测试 UI。
    - VRChat 官方封面：`vrchat.cjs` 使用独立持久会话登录（Basic + TOTP/emailotp）、检查状态、登出清 Cookie；`/worlds/{id}` 读取官方字段；封面仅允许 `*.vrchat.cloud|com` 并压缩 512px WebP data URL；`fetchCovers` 220ms 间隔、最多 500 个、可取消；`ipc/network.cjs` 暴露 IPC；`VRChatPanel.tsx` 提供登录/2FA/记住密码/进度/取消；`useAlbum.applyWorldCovers` 合并官方资料且不覆盖人工名称。
    - 单测新增 5 项代理规则映射（总计 33 项）；冒烟新增横竖卡片、`background` IPC + 协议 200、代理 6 模式应用/恢复、世界资料库官方面板断言与 `01b-timeline.png` / `03f-worlds.png` 截图。
@@ -326,16 +330,16 @@ electron-builder.yml
   - AI：四协议端点/请求体、模型列表、视觉过滤、JSON 解析、主备切换、World ID 响应解析与识图识别（本地 mock，无真实 Key）
   - 传输：本地接收/发送、令牌 401、重复去重、路径安全
   - EasyTier：组件资产选择、启动参数、TOML、状态解析、自定义参数
-- `npm run desktop:smoke`：新品牌/标题栏、自动扫描 3 张（含 1 张 300×480 竖图）、**横竖卡片断言（portrait=1 / landscape=2 / 首页精选竖图）**、XMP/JSON 识别 2 个世界、外观面板与动态背景（实验性黑洞/雨幕/亚克力/极光）、**视频背景卡片**、实验性开关的隐藏/显示门控、管理台概览/照片/设置（懒加载 CSS 正常）、**6 种代理模式应用与恢复**、**视频背景 IPC 写入 + `hoshikuzu-media://background/` 返回 200 + 删除**、**世界资料库 VRChat 官方面板/API 地址字段**、云同步页渲染与 7 个 provider、WebDAV 密钥 safeStorage 写入、云同步状态、高级设置（EasyTier/接收/发送/AI/AI 识图批量面板）、safeStorage 写入验证、亮色主题
+- `npm run desktop:smoke`：新品牌/标题栏、自动扫描 4 张（含 1 张 300×480 竖图、1 张横躺竖拍样张）、**横竖卡片断言（portrait=1 / landscape=3 / 首页精选竖图）**、**横躺竖拍旋转断言（卡片一键 270°、画框变竖、详情图片旋转且不溢出）**、XMP/JSON 识别 2 个世界、外观面板与动态背景（实验性黑洞/雨幕/亚克力/极光）、**视频背景卡片**、实验性开关的隐藏/显示门控、管理台概览/照片/设置（懒加载 CSS 正常）、**6 种代理模式应用与恢复**、**视频背景 IPC 写入 + `hoshikuzu-media://background/` 返回 200 + 删除**、**世界资料库 VRChat 官方面板/API 地址字段**、云同步页渲染与 7 个 provider、WebDAV 密钥 safeStorage 写入、云同步状态、高级设置（EasyTier/接收/发送/AI/AI 识图批量面板）、safeStorage 写入验证、亮色主题
 - `npm run desktop:smoke:onboarding`：第 1 步首启向导
 - `npm run desktop:smoke:thumbnails`：第 2 步 5 档卡片、随机样张 A/B、生成进度 17/17 并提示完成、建立 `缩略图缓存`、扫描后时间轴缩略图可显示；未滚动时网格加载 0 张、滚动后预测加载 12 张；切换实时模式仅 4 张、预先模式预取 17/17、切回预测恢复 12 张；点开详情后原图 `naturalWidth>0` 且状态显示「原图」
 - `npm run desktop:dev`：Vite + Electron 开发模式，标题栏渲染、`data-desktop` 生效、无 CSP 告警
-- `release/win-unpacked/VRchat时间轴纪念相册.exe`：本轮 `desktop:pack` 重新打包后以 `HOSHIKUZU_SMOKE=1` 启动，完整冒烟通过（exit 0），横竖卡片、视频背景 IPC/协议、代理模式、世界资料库官方面板均正常
-- `release/VRchat时间轴纪念相册-1.0.0-x64.exe` / `release/VRchat-Timeline-Album-1.0.0-portable.exe`：本轮已重新生成并上传到 GitHub Release `v1.0.0`（未签名）
+- `release/win-unpacked/VRchat时间轴纪念相册.exe`：1.0.1 重新打包后以 `HOSHIKUZU_SMOKE=1` 启动，完整冒烟通过（exit 0），横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、世界资料库官方面板均正常
+- `release/VRchat时间轴纪念相册-1.0.1-x64.exe` / `release/VRchat-Timeline-Album-1.0.1-portable.exe`：本轮已重新生成并上传到 GitHub Release `v1.0.1`（未签名）
 - 60MP（10000×6000）JPEG：扫描成功，缩略图限制为 1600×960，原图不受影响
 - 存储 CLI：14 张示例图扫描、14 张预览、统计
 - EasyTier 官方组件下载实测：v2.6.4 Windows x86_64 包下载、SHA-256 校验、解压、递归检测到 `easytier-core.exe` / `easytier-cli.exe` / `wintun.dll`，版本 2.6.4
-- 标准桌面冒烟 21 张截图（新增 `01b-timeline.png` 横竖时间轴、`03f-worlds.png` VRChat 官方面板）
+- 标准桌面冒烟 23 张截图（新增 `01b-timeline.png` 横竖时间轴、`01c-rotation.png` 横躺竖拍卡片旋转、`01d-rotation-detail.png` 详情旋转、`03f-worlds.png` VRChat 官方面板）
 
 尚未做真实环境验证（下次继续）：
 
@@ -375,6 +379,7 @@ electron-builder.yml
 - AI 识图 World ID 依赖照片印字清晰度，可能失败或误读；不会覆盖人工/已解析关联，结果需复核。
 - 视频背景压缩在渲染层实时完成（Canvas 30fps + MediaRecorder），时长越长耗时越接近视频本身时长；音频会被移除（背景循环不需要声音）。长视频即使压缩后仍可能占用较大空间，导入时会显示实际体积。
 - 旧版导入且没有记录 `width/height` 的照片会按横向 4:3 显示；重新扫描存储库后会补上尺寸并按真实方向显示。
+- 有些手机竖拍 / VRChat 手机相机截图会把画面以 1920×1080 横向像素保存，且没有 EXIF 旋转标记；程序无法仅凭像素尺寸判断内容方向，需要在卡片或详情里手动旋转一次。旋转角度随照片保存，重新扫描不会丢失。
 - VRChat 官方 API 需要登录；密码登录受 VRChat 自身风控与 2FA 限制，不保证所有账号可用。封面以 data URL 写入世界资料，数量很多时会增大 `hoshikuzu-library.json`（每张约 10–30KB）。
 - 代理测试会实际请求 VRChat `config`，网络不通时只影响测试结果；PAC 与自定义规则依赖 Chromium 规则语法。代理地址中暂不支持内嵌用户名/密码，请使用免认证的本地代理端口。
 - 银河黑洞是实验性背景，默认隐藏，需在管理台开启「实验性背景」；依赖 WebGL，不可用时回退 CSS；动态背景在 `prefers-reduced-motion` 下静态化。
@@ -404,6 +409,8 @@ electron-builder.yml
   - 自定义背景只在渲染层压缩为 data URL（≤4.5MB），不要写入存储库文件或主进程配置。
   - **视频背景**：效果 ID `video` 必须同步 `types.ts`、`appearance.ts`、`settings.ts`、`theme-boot.js`；`settings.customVideoKey` 只是文件名/IndexedDB key，真正文件在 `.hoshikuzu/backgrounds/`，不要写进相册 JSON。桌面保存走 `background:save-video`（校验 WebM/MP4 magic、sha1 命名、≤200MB），播放走 `hoshikuzu-media://background/`；网页版走 IndexedDB。视频必须去掉音轨、循环 `muted playsInline`，并在 `prefers-reduced-motion` 下只显示 poster。CSP 的 `media-src` 必须保留 `blob:` 与 `hoshikuzu-media:`。
 - **照片方向**：统一用 `src/utils/orientation.ts` 的 `photoOrientation()`，不要在各组件里重复判断。新增卡片/列表样式时按 `photo-card--portrait / --landscape / --square` 给 3:4、4:3、1:1 画框；竖图卡片保持收窄并靠中轴。尺寸来自扫描器（已按 EXIF 旋转）或上传时的 naturalWidth/Height，不要手动写死 4:3。
+  - `Photo.rotation`（0/90/180/270）是仅显示旋转；必须同步 `types.ts`、`albumStorage.sanitizePhoto`、`utils/orientation.ts`、`PhotoCard/Hero/PhotoDetailDialog` 与 `styles/orientation.css`。旋转后宽高交换由 `orientedDimensions` 处理，卡片用容器查询单位 `cqw/cqh` 交换 `<img>` 宽高再 `rotate()`，详情用 `object-fit: contain`。
+  - 旋转不得改写原图或缩略图文件；`applyScan` 必须保留 `previous.rotation`。备份/网页同步会随 `Photo` 自动携带。
 - **代理与 VRChat**：
   - 纯规则映射放 `desktop/services/proxy-config.cjs`，改完跑 `network.test.cjs`；Electron 会话应用放 `network.cjs`，必须同时应用到 `session.defaultSession` 与 `persist:hoshikuzu-vrchat`，并在 `setProxy` 后 `closeAllConnections`。
   - 代理测试使用 `testProxy` 后要恢复已保存配置，避免“测试但未保存”改变运行时网络。
@@ -449,9 +456,9 @@ electron-builder.yml
 代码仓库与发布：
 
 - 源码：<https://github.com/GhostQAQ-VRC/->
-- Release：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.0>
-- 安装版资产：`VRchat-Timeline-Album-1.0.0-x64-setup.exe`（111,950,504 bytes）
-- 便携版资产：`VRchat-Timeline-Album-1.0.0-portable.exe`（103,149,496 bytes）
+- Release：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.1>
+- 安装版资产：`VRchat-Timeline-Album-1.0.1-x64-setup.exe`（111,950,501 bytes）
+- 便携版资产：`VRchat-Timeline-Album-1.0.1-portable.exe`（103,152,303 bytes）
 
 包含：源码、`dist`、`desktop/**`、`build/icon.*`、README / HANDOFF / electron-builder 配置；不包含 `node_modules`、`release`、`.smoke*`、`.tmp-*`、`.zcode`。
 
@@ -459,7 +466,7 @@ electron-builder.yml
 
 ## 12. 下一个对话建议
 
-本版本已交付：网页 + Electron 客户端、独立存储库、两步首启与 5 档缩略图、三档图片加载策略、照片横竖识别、EasyTier/P2P、AI 总结与 AI 识图 World ID、9 种动态背景（含视频背景）、实验性黑洞、紫月品牌图标、云盘/网站云同步、网络代理管理、VRChat 官方世界封面拉取。下面是下一轮建议，按优先级排列：
+本版本已交付：网页 + Electron 客户端、独立存储库、两步首启与 5 档缩略图、三档图片加载策略、照片横竖识别与横躺竖拍旋转校正、EasyTier/P2P、AI 总结与 AI 识图 World ID、9 种动态背景（含视频背景）、实验性黑洞、紫月品牌图标、云盘/网站云同步、网络代理管理、VRChat 官方世界封面拉取。下面是下一轮建议，按优先级排列：
 
 1. **真实环境验证（P0）**
    - 用真实 VRChat 账号跑一次登录（含 TOTP/邮箱 2FA）与「拉取全部封面」，分别测试系统代理 / HTTP / SOCKS5 / PAC；确认中国大陆网络下的超时与 429 提示是否清晰。

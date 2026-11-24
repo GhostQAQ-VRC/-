@@ -18,6 +18,7 @@ interface TimelineProps {
   groups: YearGroup[];
   featuredPhotoId: string | null;
   onTogglePin: (id: string) => void;
+  onRotatePhoto: (id: string, delta: -90 | 90) => void;
   onOpenPhoto: (id: string) => void;
   onRequestDelete: (id: string) => void;
   onUpload: () => void;
@@ -29,6 +30,7 @@ interface EntryProps {
   side: 'left' | 'right';
   pinned: boolean;
   onTogglePin: (id: string) => void;
+  onRotatePhoto: (id: string, delta: -90 | 90) => void;
   onOpenPhoto: (id: string) => void;
   onRequestDelete: (id: string) => void;
 }
@@ -66,6 +68,7 @@ const TimelineEntry = memo(function TimelineEntry({
   side,
   pinned,
   onTogglePin,
+  onRotatePhoto,
   onOpenPhoto,
   onRequestDelete,
 }: EntryProps) {
@@ -76,6 +79,7 @@ const TimelineEntry = memo(function TimelineEntry({
       index={index}
       pinned={pinned}
       onTogglePin={() => onTogglePin(photo.id)}
+      onRotate={() => onRotatePhoto(photo.id, -90)}
       onOpen={() => onOpenPhoto(photo.id)}
       onDelete={() => onRequestDelete(photo.id)}
     />
@@ -128,6 +132,7 @@ export function Timeline({
   groups,
   featuredPhotoId,
   onTogglePin,
+  onRotatePhoto,
   onOpenPhoto,
   onRequestDelete,
   onUpload,
@@ -203,6 +208,7 @@ export function Timeline({
                       side={side}
                       pinned={photo.id === featuredPhotoId}
                       onTogglePin={onTogglePin}
+                      onRotatePhoto={onRotatePhoto}
                       onOpenPhoto={onOpenPhoto}
                       onRequestDelete={onRequestDelete}
                     />

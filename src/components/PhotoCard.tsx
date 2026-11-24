@@ -1,9 +1,19 @@
-import { Globe2, ImageOff, Pencil, Pin, PinOff, Sparkles, Trash2, ArrowUpRight } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Globe2,
+  ImageOff,
+  Pencil,
+  Pin,
+  PinOff,
+  RotateCcw,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import type { Photo } from '../types';
 import { photoSrc } from '../platform';
 import { useThumbnailLoader } from '../hooks/useThumbnailLoader';
 import { formatDateShort, formatTime } from '../utils/date';
-import { photoOrientation } from '../utils/orientation';
+import { photoOrientation, photoRotation } from '../utils/orientation';
 import { SafeImage } from './SafeImage';
 
 interface PhotoCardProps {
@@ -11,15 +21,25 @@ interface PhotoCardProps {
   index: number;
   pinned: boolean;
   onTogglePin: () => void;
+  onRotate: () => void;
   onOpen: () => void;
   onDelete: () => void;
 }
 
-export function PhotoCard({ photo, index, pinned, onTogglePin, onOpen, onDelete }: PhotoCardProps) {
+export function PhotoCard({
+  photo,
+  index,
+  pinned,
+  onTogglePin,
+  onRotate,
+  onOpen,
+  onDelete,
+}: PhotoCardProps) {
   const pending = !photo.world && Boolean(photo.worldId);
   const imageSrc = photo.missing ? null : photoSrc(photo) || null;
   const gate = useThumbnailLoader(photo.id, index, imageSrc);
   const orientation = photoOrientation(photo);
+  const rotation = photoRotation(photo);
   const kind =
     photo.world?.source === 'manual'
       ? '手动'
@@ -31,8 +51,12 @@ export function PhotoCard({ photo, index, pinned, onTogglePin, onOpen, onDelete 
 
   return (
     <article
-      className={`photo-card photo-card--${orientation}${pinned ? ' is-pinned' : ''}`}
+      className={`photo-card photo-card--${orientation} photo-card--rotate-${rotation}${
+        pinned ? ' is-pinned' : ''
+      }`}
       data-orientation={orientation}
+      data-rotation={rotation}
+      data-photo-id={photo.id}
     >
       <button
         type="button"
@@ -91,6 +115,18 @@ export function PhotoCard({ photo, index, pinned, onTogglePin, onOpen, onDelete 
             ) : (
               <Pin size={14} strokeWidth={1.8} />
             )}
+          </button>
+          <button
+            type="button"
+            className="photo-card__action"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRotate();
+            }}
+            aria-label="向左旋转 90 度（只改变相册显示）"
+            title="向左旋转 90°（不改原图）"
+          >
+            <RotateCcw size={14} strokeWidth={1.8} />
           </button>
           <button
             type="button"

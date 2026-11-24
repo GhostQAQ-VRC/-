@@ -3,7 +3,7 @@ import type { Photo } from '../types';
 import { photoSrc } from '../platform';
 import type { AlbumStats } from '../utils/filters';
 import { formatDateShort, formatTime } from '../utils/date';
-import { photoOrientation } from '../utils/orientation';
+import { photoOrientation, photoRotation } from '../utils/orientation';
 import { StarGlyph } from './StarGlyph';
 import { SafeImage } from './SafeImage';
 
@@ -96,7 +96,7 @@ export function Hero({
           {latestPhoto ? (
             <button
               type="button"
-              className={`feature-card feature-card--${photoOrientation(latestPhoto)}`}
+              className={`feature-card feature-card--${photoOrientation(latestPhoto)} feature-card--rotate-${photoRotation(latestPhoto)}`}
               onClick={() => onOpenPhoto(latestPhoto.id)}
               aria-label={`打开${featuredPinned ? '置顶' : '最新收录'}的记忆：${latestPhoto.note || latestPhoto.alt}`}
             >

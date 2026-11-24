@@ -22,6 +22,9 @@ export type BackgroundEffectId =
 /** How the stored photo is framed. Derived from width/height after EXIF rotate. */
 export type PhotoOrientation = 'portrait' | 'landscape' | 'square';
 
+/** Clockwise display rotation applied without touching the original file. */
+export type PhotoRotation = 0 | 90 | 180 | 270;
+
 export type WorldSource = 'demo' | 'api' | 'manual' | 'local';
 
 export interface WorldInfo {
@@ -99,6 +102,12 @@ export interface Photo {
   isSample?: boolean;
   /** Where the world association came from (AI image text recognition etc.). */
   worldIdSource?: 'ai' | 'scan' | 'manual';
+  /**
+   * Display-only clockwise rotation. Needed for screenshots whose pixels were
+   * saved sideways without an EXIF orientation tag (e.g. VRChat phone-camera
+   * portraits stored as 1920x1080). The original file is never modified.
+   */
+  rotation?: PhotoRotation;
   /** Desktop library: media kind, relative paths and recognition metadata. */
   mediaKind?: PhotoMediaKind;
   /** Path relative to the library root (POSIX separators). */

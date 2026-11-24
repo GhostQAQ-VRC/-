@@ -9,6 +9,8 @@ import {
   Pin,
   PinOff,
   Plus,
+  RotateCcw,
+  RotateCw,
   Search,
   Trash2,
   Unlink,
@@ -16,6 +18,7 @@ import {
 import type { AlbumApi } from '../hooks/useAlbum';
 import type { Photo } from '../types';
 import { formatDateShort, formatTime } from '../utils/date';
+import { rotatePhoto } from '../utils/orientation';
 import { useToast } from '../hooks/useToast';
 import { SafeImage } from '../components/SafeImage';
 import { AdminPhotoEditor } from './AdminPhotoEditor';
@@ -177,6 +180,22 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
     setPending(null);
   };
 
+  const rotateSelected = (delta: -90 | 90) => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      const photo = album.photos.find((item) => item.id === id);
+      if (!photo) continue;
+      const next = rotatePhoto(photo.rotation, delta);
+      album.updatePhoto(id, { rotation: next === 0 ? undefined : next });
+    }
+    pushToast({
+      tone: 'success',
+      title: `已旋转 ${ids.length} 张照片`,
+      description: '只改变相册显示，原图未被修改。',
+    });
+  };
+
   const activeFilters =
     query.trim() !== '' || worldFilter !== 'all' || originFilter !== 'all' || sortMode !== 'newest';
 
@@ -270,6 +289,24 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
         {selected.size > 0 ? (
           <div className="admin-bulkbar" aria-live="polite">
             <span>已选择 {selected.size} 张</span>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => rotateSelected(-90)}
+              title="选中照片向左旋转 90°（只改变显示）"
+            >
+              <RotateCcw size={13} />
+              向左旋转
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => rotateSelected(90)}
+              title="选中照片向右旋转 90°（只改变显示）"
+            >
+              <RotateCw size={13} />
+              向右旋转
+            </button>
             <button
               type="button"
               className="text-button"

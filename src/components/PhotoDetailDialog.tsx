@@ -7,6 +7,8 @@ import {
   Loader2,
   Pin,
   PinOff,
+  RotateCcw,
+  RotateCw,
   ScanText,
   Sparkles,
   Trash2,
@@ -21,6 +23,7 @@ import {
   formatTime,
   parseDate,
 } from '../utils/date';
+import { photoOrientation, photoRotation, rotatePhoto } from '../utils/orientation';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { SafeImage } from './SafeImage';
@@ -285,6 +288,14 @@ export function PhotoDetailDialog({
 
   const captured = parseDate(photo.capturedAt);
   const isFeatured = featuredId === photo.id;
+  const rotation = photoRotation(photo);
+  const orientation = photoOrientation(photo);
+  const orientationLabel =
+    orientation === 'portrait' ? '竖图' : orientation === 'square' ? '方图' : '横图';
+  const rotate = (delta: -90 | 90) => {
+    const next = rotatePhoto(rotation, delta);
+    onUpdate(photo.id, { rotation: next === 0 ? undefined : next });
+  };
   const thumbnailSrc = photo.missing ? null : photoSrc(photo) || null;
   const isLibraryPhoto = photo.mediaKind === 'library';
   // Derived from the current photo, so switching photos immediately drops the
@@ -306,7 +317,7 @@ export function PhotoDetailDialog({
       className="detail-modal"
     >
       <div className="detail-grid">
-        <figure className="detail-media">
+        <figure className={`detail-media detail-media--rotate-${rotation}`}>
           <SafeImage
             className="detail-media__bg"
             src={thumbnailSrc}
@@ -482,6 +493,49 @@ export function PhotoDetailDialog({
                   保存变更
                 </button>
               </div>
+            </div>
+          </section>
+
+          <section className="detail-orientation" aria-labelledby="detail-orientation-title">
+            <div className="detail-section-head">
+              <div>
+                <p className="section-kicker">ORIENTATION</p>
+                <h3 id="detail-orientation-title">照片方向</h3>
+              </div>
+              <span className="detail-orientation__state">
+                {orientationLabel}
+                {rotation ? ` · 已旋转 ${rotation}°` : ''}
+              </span>
+            </div>
+            <p className="detail-orientation__hint">
+              手机竖拍的照片有时会被保存成横向文件（画面内容旋转了 90°），文件本身没有旋转标记。
+              这里可以手动校正；只改变相册显示，不会修改或重写原图。
+            </p>
+            <div className="detail-orientation__actions">
+              <button
+                type="button"
+                className="button button--soft button--tiny"
+                onClick={() => rotate(-90)}
+              >
+                <RotateCcw size={13} aria-hidden="true" />
+                向左旋转 90°
+              </button>
+              <button
+                type="button"
+                className="button button--soft button--tiny"
+                onClick={() => rotate(90)}
+              >
+                <RotateCw size={13} aria-hidden="true" />
+                向右旋转 90°
+              </button>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => onUpdate(photo.id, { rotation: undefined })}
+                disabled={rotation === 0}
+              >
+                重置方向
+              </button>
             </div>
           </section>
 

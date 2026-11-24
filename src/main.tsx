@@ -19,6 +19,7 @@ import './styles/appearance-panel.css';
 import './styles/effects.css';
 import './styles/light-theme.css';
 import './styles/desktop.css';
+import './styles/orientation.css';
 import App from './App';
 
 // Surface CSP violations in the console during development and packaging checks.

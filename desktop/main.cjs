@@ -1518,6 +1518,23 @@ async function setupSmokeLibrary() {
           buffer,
         );
       }
+    } else {
+      // A portrait frame saved sideways with no EXIF tag: the scanner records
+      // 480x300 landscape pixels, so only the display rotation can fix it.
+      const portraitSvg = Buffer.from(`
+        <svg width="300" height="480" xmlns="http://www.w3.org/2000/svg">
+          <rect width="300" height="480" fill="#5b7fb9"/>
+          <rect width="300" height="70" fill="#f0c86a"/>
+          <circle cx="150" cy="160" r="50" fill="#e06a7a"/>
+          <rect y="410" width="300" height="70" fill="#7ac9a0"/>
+        </svg>
+      `);
+      const portrait = await sharp(portraitSvg).png().toBuffer();
+      const sideways = await sharp(portrait).rotate(90).png().toBuffer();
+      const sidewaysPath = path.join(root, 'sideways-portrait.png');
+      await fsp.writeFile(sidewaysPath, sideways);
+      const old = new Date('2023-01-01T00:00:00.000Z');
+      await fsp.utimes(sidewaysPath, old, old);
     }
   }
   await config.writeConfig({ libraryPath: root, onboardingDismissed: true });
@@ -1825,6 +1842,130 @@ async function runSmokeTest(win) {
   if (orientationCheck.landscapeCards < 1) {
     throw new Error('landscape photos lost their landscape frame');
   }
+
+  // A sideways portrait screenshot: start landscape, rotate it from the card
+  // action, then verify the frame becomes portrait and the CSS rotation is
+  // applied to the rendered image.
+  const findSidewaysCard = `(() => {
+    const hit = document.querySelector('.photo-card__hit[aria-label*="sideways-portrait"]');
+    return hit ? hit.closest('.photo-card') : null;
+  })()`;
+  const sidewaysBefore = await win.webContents
+    .executeJavaScript(`(() => {
+      const card = ${findSidewaysCard};
+      if (!card) return { error: 'sideways card missing' };
+      const media = card.querySelector('.photo-card__media');
+      const rect = media.getBoundingClientRect();
+      return {
+        rotation: card.dataset.rotation,
+        className: card.className,
+        width: rect.width,
+        height: rect.height,
+      };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] sideways before', sidewaysBefore);
+  if (sidewaysBefore.error) throw new Error(sidewaysBefore.error);
+  if (sidewaysBefore.rotation !== '0' || sidewaysBefore.width <= sidewaysBefore.height) {
+    throw new Error('sideways portrait should start as a landscape card');
+  }
+  const rotateClick = await win.webContents
+    .executeJavaScript(`(() => {
+      const card = ${findSidewaysCard};
+      const button = card && card.querySelectorAll('.photo-card__action')[1];
+      if (!button) return { error: 'rotate action missing' };
+      button.click();
+      return { ok: true };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  if (rotateClick.error) throw new Error(rotateClick.error);
+  await delay(900);
+  const sidewaysAfter = await win.webContents
+    .executeJavaScript(`(() => {
+      const card = ${findSidewaysCard};
+      if (!card) return { error: 'sideways card missing after rotate' };
+      const media = card.querySelector('.photo-card__media');
+      const rect = media.getBoundingClientRect();
+      const image = media.querySelector('img');
+      return {
+        rotation: card.dataset.rotation,
+        className: card.className,
+        width: rect.width,
+        height: rect.height,
+        transform: image ? getComputedStyle(image).transform : null,
+      };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] sideways after', sidewaysAfter);
+  if (sidewaysAfter.error) throw new Error(sidewaysAfter.error);
+  if (sidewaysAfter.rotation !== '270') {
+    throw new Error('rotate action did not store a 270 degree rotation');
+  }
+  if (!sidewaysAfter.className.includes('photo-card--portrait')) {
+    throw new Error('rotated sideways photo did not become portrait');
+  }
+  if (sidewaysAfter.height <= sidewaysAfter.width) {
+    throw new Error('rotated sideways photo kept a landscape frame');
+  }
+  await win.webContents.executeJavaScript(`(() => {
+    const card = ${findSidewaysCard};
+    if (card) {
+      const rect = card.getBoundingClientRect();
+      window.scrollTo({ top: window.scrollY + rect.top - 140, behavior: 'instant' });
+    }
+  })()`);
+  await delay(1500);
+  await shot('01c-rotation.png');
+
+  await win.webContents.executeJavaScript(
+    `document.querySelector('.photo-card__hit[aria-label*="sideways-portrait"]')?.click()`,
+  );
+  await delay(1400);
+  const rotationDetail = await win.webContents
+    .executeJavaScript(`(() => {
+      const media = document.querySelector('.detail-media');
+      const image = media && media.querySelector('.detail-media__image:not(.detail-media__image--original)');
+      const mediaRect = media ? media.getBoundingClientRect() : null;
+      const imageRect = image ? image.getBoundingClientRect() : null;
+      return {
+        className: media ? media.className : null,
+        transform: image ? getComputedStyle(image).transform : null,
+        imageWidth: imageRect ? imageRect.width : null,
+        imageHeight: imageRect ? imageRect.height : null,
+        mediaWidth: mediaRect ? mediaRect.width : null,
+        mediaHeight: mediaRect ? mediaRect.height : null,
+      };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] rotation detail', rotationDetail);
+  if (rotationDetail.error) throw new Error(rotationDetail.error);
+  if (!rotationDetail.className?.includes('detail-media--rotate-270')) {
+    throw new Error('detail view did not apply the stored rotation');
+  }
+  if (!rotationDetail.transform || rotationDetail.transform === 'none') {
+    throw new Error('detail image was not rotated with CSS');
+  }
+  if (
+    rotationDetail.imageWidth === null ||
+    rotationDetail.imageHeight === null ||
+    rotationDetail.imageHeight <= rotationDetail.imageWidth
+  ) {
+    throw new Error('rotated detail image is not portrait after rotation');
+  }
+  if (
+    rotationDetail.imageWidth > rotationDetail.mediaWidth + 2 ||
+    rotationDetail.imageHeight > rotationDetail.mediaHeight + 2
+  ) {
+    throw new Error('rotated detail image overflows the media frame');
+  }
+  await shot('01d-rotation-detail.png');
+  await win.webContents.executeJavaScript(`document.querySelector('.detail-close')?.click()`);
+  await delay(700);
+
+  await win.webContents.executeJavaScript(
+    `window.scrollTo({ top: 0, behavior: 'instant' })`,
+  );
+  await delay(500);
   await win.webContents.executeJavaScript(`
     (() => {
       const card = document.querySelector('.photo-card');
