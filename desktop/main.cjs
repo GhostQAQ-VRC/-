@@ -27,6 +27,7 @@ const backupLib = require('./library/backup.cjs');
 const { createAdvancedServices } = require('./ipc/advanced.cjs');
 const { createSyncService } = require('./services/sync.cjs');
 const { createNetworkService } = require('./ipc/network.cjs');
+const { createUpdateService } = require('./ipc/update.cjs');
 
 const isSmoke = process.env.HOSHIKUZU_SMOKE === '1';
 const smokeNoLibrary = process.env.HOSHIKUZU_SMOKE_NO_LIBRARY === '1';
@@ -69,6 +70,7 @@ let quitting = false;
 let advancedServices = null;
 let syncService = null;
 let networkService = null;
+let updateService = null;
 let sampleTempDir = null;
 let previewReadyBuffer = [];
 let previewReadyTimer = null;
@@ -2094,6 +2096,12 @@ async function runSmokeTest(win) {
         videoStatus = response.status;
         await api.background.deleteVideo(videoFile.key);
       }
+      let updateInfo = null;
+      try {
+        updateInfo = await api.update.check();
+      } catch (updateError) {
+        updateInfo = { ok: false, error: String(updateError && updateError.message) };
+      }
       return {
         hasVideo,
         hasNetwork,
@@ -2102,6 +2110,10 @@ async function runSmokeTest(win) {
         restored: restored.proxy.mode,
         videoSaved: videoFile.ok,
         videoStatus,
+        updateOk: Boolean(updateInfo && updateInfo.ok),
+        updateLatest: (updateInfo && updateInfo.latestVersion) || null,
+        updateHas: Boolean(updateInfo && updateInfo.hasUpdate),
+        updateError: (updateInfo && updateInfo.error) || null,
       };
     })()`)
     .catch((error) => ({ error: error.message }));
@@ -2300,6 +2312,10 @@ async function bootstrap() {
   networkService = createNetworkService({ broadcast });
   networkService.register();
   await networkService.startAuto();
+
+  updateService = createUpdateService({ broadcast });
+  updateService.register();
+  updateService.startAuto();
 
   registerIpc();
   await createWindow();

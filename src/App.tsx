@@ -9,6 +9,7 @@ import { ThumbnailLoadingProvider } from './hooks/useThumbnailLoader';
 import { getDesktopBridge, isDesktopRuntime } from './platform';
 import { importPhotosFromDesktop } from './platform/importPhotos';
 import { DesktopTitleBar } from './components/DesktopTitleBar';
+import { UpdateNotice } from './components/UpdateNotice';
 import { LibraryGate } from './components/LibraryGate';
 import { BrandGlyph } from './components/BrandGlyph';
 import { PublicSite } from './PublicSite';
@@ -182,6 +183,7 @@ function Root() {
     <DesktopLibraryProvider album={album}>
       <DesktopServicesProvider album={album}>
         <Shell album={album} path={path} navigate={navigate} />
+        <UpdateNotice />
       </DesktopServicesProvider>
     </DesktopLibraryProvider>
   );

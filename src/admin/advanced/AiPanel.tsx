@@ -9,6 +9,7 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
   Square,
@@ -90,6 +91,12 @@ export function AiPanel({ album }: { album: AlbumApi }) {
   const summarized = libraryPhotos.filter((photo) => Boolean(photo.aiSummary)).length;
   const missing = libraryPhotos.length - summarized;
   const noWorld = libraryPhotos.filter((photo) => !photo.worldId && !photo.worldRef).length;
+  const orientationCandidates = libraryPhotos.filter((photo) => {
+    if (photo.rotation) return false;
+    if (!photo.width || !photo.height) return false;
+    const ratio = photo.width / photo.height;
+    return ratio >= 1.68 && ratio <= 1.86;
+  }).length;
 
   const visibleModels = useMemo(() => {
     const query = modelSearch.trim().toLowerCase();
@@ -242,6 +249,18 @@ export function AiPanel({ album }: { album: AlbumApi }) {
       const saved = await save();
       if (!saved) return;
       const result = await startAiBatch('all', undefined, 'worldId');
+      if (!result.ok) setMessage({ ok: false, text: result.error || '无法开始。' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const startOrientationBatch = async () => {
+    setBusy('orientationBatch');
+    try {
+      const saved = await save();
+      if (!saved) return;
+      const result = await startAiBatch('all', undefined, 'orientation');
       if (!result.ok) setMessage({ ok: false, text: result.error || '无法开始。' });
     } finally {
       setBusy(null);
@@ -619,6 +638,26 @@ export function AiPanel({ album }: { album: AlbumApi }) {
                 )}
                 识别画面 World ID（{noWorld}）
               </button>
+              <button
+                type="button"
+                className="button button--soft button--small"
+                onClick={() => void startOrientationBatch()}
+                disabled={
+                  busy !== null ||
+                  orientationCandidates === 0 ||
+                  (!form?.primaryModel && !form?.backupModel) ||
+                  !keyReady ||
+                  unverifiedSelected
+                }
+                title="只检测 16:9 横图；有角色时以角色头顶朝上为准，没有角色时按风景照不旋转"
+              >
+                {busy === 'orientationBatch' ? (
+                  <Loader2 size={14} className="spinner" />
+                ) : (
+                  <RotateCcw size={14} />
+                )}
+                AI 校正方向（{orientationCandidates}）
+              </button>
             </>
           )}
           <button
@@ -635,7 +674,11 @@ export function AiPanel({ album }: { album: AlbumApi }) {
         {aiBatch.running ? (
           <div className="advanced-progress">
             <span>
-              {aiBatch.mode === 'worldId' ? '正在识别 World ID' : '正在生成总结'}{' '}
+              {aiBatch.mode === 'worldId'
+                ? '正在识别 World ID'
+                : aiBatch.mode === 'orientation'
+                  ? '正在检测照片方向'
+                  : '正在生成总结'}{' '}
               {aiBatch.current}/{aiBatch.total} · 成功 {aiBatch.done} · 失败 {aiBatch.failed}
             </span>
             <strong>
@@ -663,9 +706,13 @@ export function AiPanel({ album }: { album: AlbumApi }) {
               ? `上次识别：找到 ${aiBatch.last.worldIds ?? 0} 个 World ID${
                   aiBatch.last.failed ? `，${aiBatch.last.failed} 张未识别/失败` : ''
                 }`
-              : `上次任务：成功 ${aiBatch.last.done} 张${
-                  aiBatch.last.failed ? `，失败 ${aiBatch.last.failed} 张` : ''
-                }`}
+              : aiBatch.last.mode === 'orientation'
+                ? `上次方向检测：成功 ${aiBatch.last.done} 张，校正 ${aiBatch.last.rotated ?? 0} 张${
+                    aiBatch.last.failed ? `，${aiBatch.last.failed} 张失败` : ''
+                  }`
+                : `上次任务：成功 ${aiBatch.last.done} 张${
+                    aiBatch.last.failed ? `，失败 ${aiBatch.last.failed} 张` : ''
+                  }`}
             {aiBatch.last.canceled ? '，已停止' : ''}
           </p>
         ) : null}
@@ -673,7 +720,8 @@ export function AiPanel({ album }: { album: AlbumApi }) {
         <p className="admin-panel__note">
           <AlertTriangle size={13} aria-hidden="true" />
           批量任务会按顺序调用视觉模型；可以随时停止。离开此页面后任务仍会继续，结果会自动写回照片。
-          World ID 识别会提高图片分辨率，专门读取拍立得画面上的 wrld_ 文字。
+          World ID 识别会提高图片分辨率，专门读取拍立得画面上的 wrld_ 文字。方向校正只处理 16:9 横图：
+          有角色时以角色头顶朝上为准；没有角色时按风景照处理，不旋转。
         </p>
       </AdminPanel>
     </>

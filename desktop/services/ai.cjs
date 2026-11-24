@@ -672,6 +672,184 @@ function parseWorldIdResponse(raw) {
   return { worldId, worldName, confidence };
 }
 
+function buildOrientationPrompt() {
+  return [
+    '你是 VRChat 照片方向校对器。请判断画面内容的方向，不要根据图片文件的宽高判断。',
+    '规则：',
+    '1. 先判断画面里有没有“角色自拍/人物主体”。如果有角色，找到角色头部，只看头顶（发旋、耳朵上方）在画面中指向哪一边：上、右、下、左。不要判断角色面朝哪边，也不要因为角色侧脸就认为图片旋转了。',
+    '2. 只有角色是画面主体时才按人物方向校正；如果人物很小、只是风景中的路人，按风景处理。',
+    '3. 没有人物主体时按风景处理：风景照通常是 16:9，rotation=0，不要旋转。',
+    '4. rotation 表示为了让头顶朝上需要顺时针旋转的角度：头顶朝上→0，朝右→270，朝下→180，朝左→90。',
+    '只输出 JSON，不要解释，不要代码块：{"type":"selfie"|"landscape","head":"up"|"right"|"down"|"left"|"none","rotation":0|90|180|270,"confidence":0.0}',
+  ].join('\n');
+}
+
+const HEAD_ROTATION = { up: 0, right: 270, down: 180, left: 90 };
+
+function parseOrientationResponse(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  const cleaned = text
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
+  let payload = null;
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try {
+      payload = JSON.parse(cleaned.slice(start, end + 1));
+    } catch {
+      payload = null;
+    }
+  }
+
+  const typeMatch = cleaned.match(/"type"\s*:\s*"?(selfie|landscape)/i);
+  const headMatch = cleaned.match(/"head"\s*:\s*"?(up|right|down|left|none)/i);
+  const rotationMatch = cleaned.match(/"rotation"\s*:\s*(0|90|180|270)/);
+  const confidenceMatch = cleaned.match(/"confidence"\s*:\s*([0-9.]+)/);
+
+  const rawHead =
+    payload && typeof payload.head === 'string'
+      ? payload.head.toLowerCase()
+      : headMatch
+        ? headMatch[1].toLowerCase()
+        : null;
+  const head = ['up', 'right', 'down', 'left', 'none'].includes(rawHead) ? rawHead : null;
+  const rawType =
+    payload && typeof payload.type === 'string'
+      ? payload.type.toLowerCase()
+      : typeMatch
+        ? typeMatch[1].toLowerCase()
+        : null;
+  const type =
+    rawType === 'selfie' || rawType === 'landscape'
+      ? rawType
+      : head && head !== 'none'
+        ? 'selfie'
+        : null;
+  if (!type && !head) return null;
+
+  const numericRotation =
+    payload && [0, 90, 180, 270].includes(payload.rotation)
+      ? payload.rotation
+      : rotationMatch
+        ? Number(rotationMatch[1])
+        : null;
+
+  let rotation = 0;
+  if (type === 'selfie' && head && head !== 'none') {
+    rotation = HEAD_ROTATION[head] ?? 0;
+  } else if (type === 'selfie' && numericRotation !== null) {
+    rotation = numericRotation;
+  } else if (type === 'landscape') {
+    rotation = 0;
+  } else if (numericRotation !== null) {
+    rotation = numericRotation;
+  }
+
+  let confidence = 0;
+  if (payload && typeof payload.confidence === 'number') {
+    confidence = payload.confidence;
+  } else if (confidenceMatch) {
+    confidence = Number(confidenceMatch[1]);
+  } else if (head && head !== 'none') {
+    confidence = 0.7;
+  } else if (type === 'landscape') {
+    confidence = 0.6;
+  }
+  confidence = Math.max(0, Math.min(1, Number.isFinite(confidence) ? confidence : 0));
+
+  return {
+    type: type || (head && head !== 'none' ? 'selfie' : 'landscape'),
+    head: head || 'none',
+    rotation,
+    confidence,
+  };
+}
+
+async function detectOrientation(options) {
+  const { root, item, settings, apiKey } = options;
+  const protocol = settings.protocol;
+  const timeoutMs = options.timeoutMs ?? 90000;
+  const candidates = [settings.primaryModel, settings.backupModel]
+    .map((model) => String(model || '').trim())
+    .filter((model, index, list) => model && list.indexOf(model) === index);
+  if (candidates.length === 0) {
+    return { ok: false, error: '请先在高级设置中选择主模型或备用模型。' };
+  }
+
+  let absolute;
+  try {
+    absolute = await resolveImagePath(root, item);
+    await fsp.access(absolute);
+  } catch {
+    try {
+      if (!item.libraryPath) throw new Error('没有原图路径。');
+      absolute = repository.resolveInside(root, item.libraryPath);
+      if (!absolute) throw new Error('原图路径不合法。');
+      await fsp.access(absolute);
+    } catch (error) {
+      return { ok: false, error: error.message || '照片文件不可用。' };
+    }
+  }
+
+  let image;
+  try {
+    image = await prepareImage(absolute, { maxEdge: 1280, quality: 84 });
+  } catch (error) {
+    return { ok: false, error: `无法读取照片：${error.message}` };
+  }
+
+  const prompt = buildOrientationPrompt();
+  const failures = [];
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const model = candidates[index];
+    const vision = isVisionModel(protocol, model);
+    if (!vision && !settings.allowUnverifiedVision) {
+      failures.push(`${model}：未被识别为视觉模型`);
+      continue;
+    }
+    try {
+      const text = await callModel({
+        protocol,
+        baseUrl: settings.baseUrl,
+        apiKey,
+        model,
+        prompt,
+        image,
+        timeoutMs,
+      });
+      const parsed = parseOrientationResponse(text);
+      if (!parsed) {
+        failures.push(`${model}：没有返回可用的方向 JSON`);
+        continue;
+      }
+      if (parsed.type === 'selfie' && parsed.rotation !== 0 && parsed.confidence < 0.45) {
+        failures.push(`${model}：方向判断置信度过低 (${parsed.confidence.toFixed(2)})`);
+        continue;
+      }
+      return {
+        ok: true,
+        type: parsed.type,
+        head: parsed.head,
+        rotation: parsed.rotation,
+        confidence: parsed.confidence,
+        model,
+        usedBackup: index > 0,
+      };
+    } catch (error) {
+      failures.push(`${model}：${error.message}`);
+    }
+  }
+
+  return {
+    ok: false,
+    error: failures.join('；') || 'AI 未能判断照片方向。',
+  };
+}
+
 async function recognizeWorldId(options) {
   const { root, item, settings, apiKey } = options;
   const protocol = settings.protocol;
@@ -763,12 +941,15 @@ async function testConnection(options) {
 
 module.exports = {
   PROTOCOLS,
+  buildOrientationPrompt,
   buildPrompt,
   buildWorldIdPrompt,
   callModel,
+  detectOrientation,
   isVisionModel,
   listModels,
   normalizeBaseUrl,
+  parseOrientationResponse,
   parseSummary,
   parseWorldIdResponse,
   prepareImage,

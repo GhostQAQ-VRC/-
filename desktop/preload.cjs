@@ -100,6 +100,11 @@ contextBridge.exposeInMainWorld('hoshikuzu', {
       cancelCovers: () => invoke('vrchat:cancel-covers'),
       onCoverProgress: (callback) => subscribe('vrchat:cover-progress', callback),
     },
+    update: {
+      check: () => invoke('update:check'),
+      open: (url) => invoke('update:open', url),
+      onAvailable: (callback) => subscribe('update:available', callback),
+    },
     window: {
       minimize: () => send('window:minimize'),
       toggleMaximize: () => send('window:toggle-maximize'),
@@ -134,6 +139,7 @@ contextBridge.exposeInMainWorld('hoshikuzu', {
       listModels: (payload) => invoke('ai:list-models', payload),
       generate: (payload) => invoke('ai:generate', payload),
       recognizeWorldId: (payload) => invoke('ai:recognize-world-id', payload),
+      detectOrientation: (payload) => invoke('ai:detect-orientation', payload),
       startBatch: (payload) => invoke('ai:start-batch', payload),
       cancelBatch: () => invoke('ai:cancel-batch'),
       onBatchProgress: (callback) => subscribe('ai:batch-progress', callback),

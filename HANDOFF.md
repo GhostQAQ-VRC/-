@@ -12,9 +12,11 @@
 - **视频背景**：背景特效新增「视频背景」。导入 MP4 / WebM / MOV 等常见视频，客户端自动判断是否需要压缩；体积大或容器不友好时在渲染层用 Canvas + MediaRecorder 重编码为 VP9/VP8 WebM，**去除音轨（画面无损）**、长边限制 1920px、按目标体积选择最高码率，必要时二次降码率；客户端存 `<库>/.hoshikuzu/backgrounds/<sha1>.webm` 并通过 `hoshikuzu-media://background/` 播放，网页版存 IndexedDB。首帧 poster 随设置保存，视频解码前/失败时显示。
 - **照片横竖识别**：新增 `PhotoOrientation` 与 `utils/orientation.ts`，用 `width/height`（扫描时已按 EXIF 旋转）区分 portrait / landscape / square。时间轴卡片、画廊、密排相册、首页精选卡片都按方向使用 3:4 / 4:3 / 1:1 画框；竖图卡片会收窄并靠近中轴，不再统一裁成 4:3。
 - **方向校正（1.0.1）**：部分手机竖拍 / VRChat 手机相机截图会把竖画面以 1920×1080 横向像素保存，且没有 EXIF 标记，无法仅凭宽高自动判断。`Photo.rotation`（0/90/180/270）记录仅显示的旋转，卡片悬浮操作可一键向左 90°，详情页「照片方向」可左右旋转/重置；旋转后宽高自动交换并按竖图显示，原图字节不变。卡片/首页/详情使用容器查询单位旋转 `<img>`，不生成新原图。
+- **AI 方向检测（1.0.2）**：按「角色自拍时头顶朝上；没有人物时按 16:9 风景照不旋转」的规则调用已配置的视觉模型。只检测没有 rotation 的 16:9 横图；照片详情有「AI 检测方向」，高级设置 → AI 面板有「AI 校正方向」批量任务。模型只判断头顶朝向，程序换算顺时针角度（朝右→270、朝左→90、朝下→180）；置信度低于 0.45 不自动改。无模型/无 Key 时保留手动旋转。
+- **更新检测（1.0.2）**：桌面客户端启动后通过当前代理请求 GitHub `releases/latest`，发现更高版本时右下角弹出「发现新版本」，可下载安装包或查看更新说明；站点设置新增「检查更新」卡片。版本比较、仓库 URL 白名单与安装包选择有单测；按版本记住“稍后”，不会重复打扰。
 - **网络代理管理**：管理台 → 站点设置新增「网络代理」。模式：跟随系统 / 不使用 / HTTP / SOCKS5 / PAC / 自定义规则，可设置绕过地址、测试连通性。代理同时应用到默认会话与 VRChat 专用持久会话；测试后自动恢复已保存配置。
 - **VRChat 官方世界封面**：世界资料库新增「从 VRChat 拉取世界封面」。登录官方账号（支持 TOTP / 邮箱 2FA）后批量读取所有有效 `wrld_…` 的名称、作者、简介、人数与封面；封面压缩为 512px WebP data URL 写回 `WorldLibraryEntry.thumbnail`，离线可显示。密码可选 safeStorage 记住，登出清除。
-- **验证**：`npm run build` 通过；`npm run test:desktop` **33 项通过**（新增 5 项代理规则映射）；`npm run desktop:smoke` 通过，新增横竖卡片断言、**横躺竖拍样张旋转断言（卡片 + 详情）**、视频背景 IPC + `hoshikuzu-media://background` 200、代理 6 模式应用/恢复、世界资料库官方面板渲染与 `01c-rotation.png` / `01d-rotation-detail.png` / `03f-worlds.png` / `01b-timeline.png` 截图；`npm run desktop:pack` 重新生成 `release/win-unpacked`，打包版以 `HOSHIKUZU_SMOKE=1` 启动同样通过（exit 0）。
+- **验证**：`npm run build` 通过；`npm run test:desktop` **41 项通过**（代理 5 + 方向解析 3 + AI 方向 mock 1 + 更新检测 4）；`npm run desktop:smoke` 通过，新增横竖卡片断言、**横躺竖拍样张旋转断言（卡片 + 详情）**、视频背景 IPC + `hoshikuzu-media://background` 200、代理 6 模式应用/恢复、**GitHub 更新检查 IPC（ok，latest 1.0.1）**、世界资料库官方面板渲染与 `01c-rotation.png` / `01d-rotation-detail.png` / `03f-worlds.png` / `01b-timeline.png` 截图；更新横幅用 1.0.0 版本号实测显示正常。
 - **接手顺序**：第 2 节恢复命令 → 第 4 节存储库/配置 → 第 8 节验证状态 → 第 10 节改动约束。默认外观「暮色紫 · 星轨交错 · 星轨」不要破坏。
 
 ---
@@ -33,11 +35,13 @@
 - 客户端云同步：**云盘日期文件夹同步 / 网站数据同步**
 - 背景：**9 种**（新增循环视频背景；银河黑洞为实验性背景，默认隐藏）
 - 照片卡片：**按原图横竖方向自适应画框**（3:4 / 4:3 / 1:1）；**横躺竖拍可一键旋转校正并持久化**
+- 客户端更新：**启动自动检查 GitHub Release**，发现新版本弹出下载提示；设置页可手动检查
+- AI 方向：**按角色头顶朝上 / 16:9 风景不旋转的规则**，用视觉模型单张或批量校正方向
 - 默认外观：**暮色紫 · 星轨交错 · 星轨**（7 主题 × 4 布局）
 - `npm run build` 已通过；`npm run test:desktop` **33 项通过**
-- 客户端冒烟已通过（含横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、世界资料库官方面板）；`release/win-unpacked` 已用 1.0.1 代码重新打包并启动冒烟通过；NSIS + 便携版已重新生成并上传到 GitHub Release `v1.0.1`
+- 客户端冒烟已通过（含横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、更新检查、世界资料库官方面板）；`release/win-unpacked` 已用 1.0.2 代码重新打包并启动冒烟通过；NSIS + 便携版已重新生成并上传到 GitHub Release `v1.0.2`
 - GitHub 仓库：<https://github.com/GhostQAQ-VRC/->
-- Release 下载：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.1>
+- Release 下载：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.2>
   - `VRchat-Timeline-Album-1.0.0-x64-setup.exe`（NSIS，约 107MB，未签名）
   - `VRchat-Timeline-Album-1.0.0-portable.exe`（便携版，约 99MB）
 
@@ -82,6 +86,8 @@ npm run library:cli -- scan <文件夹>          # 独立 CLI
 - 动态背景：星轨、雨幕（玻璃水滴滑落）、亚克力、樱吹雪、极光、萤火、自定义图片、循环视频；实验性银河黑洞（WebGL）需在管理台开启后显示
 - 照片横竖识别：按 `width/height` 区分 portrait / landscape / square，时间轴、画廊、密排、首页精选按 3:4 / 4:3 / 1:1 显示；竖图卡片收窄并靠近中轴
 - **照片方向校正**：卡片悬浮「向左旋转 90°」；详情页「照片方向」支持向左/向右旋转与重置；旋转只改显示、不改原图，随相册保存
+- **AI 方向检测**：按「角色头顶朝上 / 无人物时 16:9 风景不旋转」规则调用视觉模型；详情单张 + AI 面板批量（仅无 rotation 的 16:9 横图）
+- **更新检测**：启动后经代理请求 GitHub Release；右下角提示新版本并可直接下载安装包；设置页「检查更新」
 - 空相册、无结果、存储受限、图片加载失败占位
 
 ### 管理台
@@ -211,6 +217,7 @@ src/
     orientation.ts              # width/height → portrait / landscape / square
   components/
     DesktopTitleBar.tsx         # 自定义标题栏（全名）
+    UpdateNotice.tsx            # 右下角新版本提示（下载 / 更新说明 / 稍后）
     BrandGlyph.tsx              # 紫月 + 星轨品牌图标
     LibraryGate.tsx             # 首次启动：第 1 步选择存储库 / 不可用提示
     ThumbnailSetup.tsx          # 首启第 2 步：缩略图目录、5 档规格、随机样张 A/B
@@ -223,6 +230,7 @@ src/
     SyncPage.tsx                # 云同步：云盘 / 网站两种同步设置、进度与结果
     SettingsPage.tsx            # 桌面备份 / 网页备份迁移
     NetworkPanel.tsx            # 网络代理：6 种模式、绕过地址、连通性测试
+    UpdateCard.tsx              # 检查更新、下载安装包
     VRChatPanel.tsx             # VRChat 官方登录、批量封面拉取与进度
     WorldsPage.tsx              # 世界资料库 + VRChat 官方资料面板
     DashboardPage.tsx           # 存储库状态
@@ -236,6 +244,8 @@ src/
     advanced.css                # 高级设置与 AI 展示
     sync.css                    # 云同步页表单、进度、接口说明
     effects.css                 # 动态背景层、亚克力、极光、自定义背景
+    orientation.css             # 照片旋转画框、详情旋转、方向面板
+    update.css                  # 右下角新版本提示
 desktop/
   main.cjs                      # 窗口、协议（含 background）、IPC、菜单、扫描/导入/备份、冒烟
   preload.cjs                   # window.hoshikuzu.desktop（library/media/backup/background/network/vrchat/ai/easytier/transfer）
@@ -243,8 +253,9 @@ desktop/
   dev.cjs / smoke.cjs / make-icon.cjs / run-tests.cjs
   ipc/advanced.cjs              # AI / EasyTier / 传输 IPC 与自动启动
   ipc/network.cjs               # 代理与 VRChat 官方资料 IPC
+  ipc/update.cjs                # GitHub Release 更新检查、启动提示、打开下载页
   services/
-    ai.cjs                      # 四协议、模型列表、视觉判断、主备、图片预处理
+    ai.cjs                      # 四协议、模型列表、视觉判断、主备、图片预处理、AI 方向检测
     transfer.cjs                # 接收 HTTP、令牌、串行入库；发送流式上传
     easytier.cjs                # 组件检测/下载/参数/启动/状态/日志/提权
     sync.cjs                    # 云同步 IPC、配置、密钥、任务状态
@@ -252,6 +263,7 @@ desktop/
     proxy-config.cjs            # 纯代理规则映射（可单测）
     network.cjs                 # Electron 会话代理应用、resolveProxy、连通性测试
     vrchat.cjs                  # 官方登录/2FA/状态/世界查询/封面下载与批量任务
+    update-check.cjs            # 版本比较、仓库 URL 白名单、安装包选择（纯函数）
   library/
     ingest.cjs                  # 导入/接收统一管线（prepareDraft/importReceivedFile）
     png-chunks.cjs              # PNG tEXt/iTXt/zTXt
@@ -313,6 +325,10 @@ electron-builder.yml
    - 网络代理：`proxy-config.cjs` 纯规则映射（单测覆盖 6 模式）；`network.cjs` 应用 `setProxy` 到默认会话与 `persist:hoshikuzu-vrchat`，`closeAllConnections` 使切换即时生效；`ipc/network.cjs` 提供 get/set/test IPC，测试后恢复已保存配置；`NetworkPanel.tsx` 提供模式、地址、绕过与测试 UI。
    - VRChat 官方封面：`vrchat.cjs` 使用独立持久会话登录（Basic + TOTP/emailotp）、检查状态、登出清 Cookie；`/worlds/{id}` 读取官方字段；封面仅允许 `*.vrchat.cloud|com` 并压缩 512px WebP data URL；`fetchCovers` 220ms 间隔、最多 500 个、可取消；`ipc/network.cjs` 暴露 IPC；`VRChatPanel.tsx` 提供登录/2FA/记住密码/进度/取消；`useAlbum.applyWorldCovers` 合并官方资料且不覆盖人工名称。
    - 单测新增 5 项代理规则映射（总计 33 项）；冒烟新增横竖卡片、`background` IPC + 协议 200、代理 6 模式应用/恢复、世界资料库官方面板断言与 `01b-timeline.png` / `03f-worlds.png` 截图。
+22. **AI 方向检测与更新提示（1.0.2）**：
+   - AI 方向：`ai.cjs` 新增 `buildOrientationPrompt` / `parseOrientationResponse` / `detectOrientation`。提示词明确「只看角色头顶（发旋/耳朵上方）朝向，不判断面朝哪边；没有人物主体时按 16:9 风景处理 rotation=0」。解析器只信 `head` 并自行换算（right→270、left→90、down→180），低置信度（<0.45）不自动改。IPC `ai:detect-orientation` 与批量 `mode='orientation'`；只处理无 rotation 且宽高比 1.68–1.86 的横图。详情页「AI 检测方向」，AI 面板「AI 校正方向」批量按钮与进度。
+   - 更新提示：`update-check.cjs` 纯函数（版本比较、仓库 URL 白名单、setup/portable 资产选择）+ `ipc/update.cjs`（经 `network.networkSession()` 请求 GitHub `releases/latest`，15s 超时、5 分钟缓存、启动 4.5s 后检查、smoke 跳过自动检查）；`UpdateNotice` 右下角横幅显示版本/体积/下载/说明/稍后，按版本记录 dismissed；设置页 `UpdateCard` 手动检查。
+   - 单测新增 8 项（AI 方向解析 3、AI 方向 mock 1、更新检测 4；总计 41 项）；冒烟 `settings extras` 验证 `update.check()` 返回 ok 且 latest=1.0.1，并用 1.0.0 版本号实测右下角更新横幅。
 
 ---
 
@@ -322,20 +338,22 @@ electron-builder.yml
 已通过：
 
 - `npm run build`（TypeScript + Vite；管理台已拆分懒加载 chunk）
-- `npm run test:desktop`（33 项）：
+- `npm run test:desktop`（41 项）：
   - 存储：XMP、VRCX JSON、文件名、PNG chunk、mtime、扫描/预览/统计、ZIP 备份恢复
   - 缩略图：缓存目录/预设校验、`hash_边_q质量` 命名、旧名兼容、扫描跳过缓存目录、样张不进库、原图字节不变
   - 云同步：日期文件夹/清单去重/强制重传/元数据、网站 payload 与 Bearer 鉴权、WebDAV MKCOL/PUT、原图只读
   - 代理：6 种模式规范化、host:port 解析、HTTP→fixed_servers、SOCKS5/自定义规则、PAC/system/direct 映射（`network.test.cjs`）
+  - 方向：AI 方向提示词包含头顶/16:9 规则、解析器 head→rotation 映射、landscape 强制 0、mock 视觉模型返回 head=right→270（`ai.test.cjs`）
+  - 更新：版本比较、仓库 URL 白名单、setup/portable 资产选择、当前版本不低于最新时不提示（`update.test.cjs`）
   - AI：四协议端点/请求体、模型列表、视觉过滤、JSON 解析、主备切换、World ID 响应解析与识图识别（本地 mock，无真实 Key）
   - 传输：本地接收/发送、令牌 401、重复去重、路径安全
   - EasyTier：组件资产选择、启动参数、TOML、状态解析、自定义参数
-- `npm run desktop:smoke`：新品牌/标题栏、自动扫描 4 张（含 1 张 300×480 竖图、1 张横躺竖拍样张）、**横竖卡片断言（portrait=1 / landscape=3 / 首页精选竖图）**、**横躺竖拍旋转断言（卡片一键 270°、画框变竖、详情图片旋转且不溢出）**、XMP/JSON 识别 2 个世界、外观面板与动态背景（实验性黑洞/雨幕/亚克力/极光）、**视频背景卡片**、实验性开关的隐藏/显示门控、管理台概览/照片/设置（懒加载 CSS 正常）、**6 种代理模式应用与恢复**、**视频背景 IPC 写入 + `hoshikuzu-media://background/` 返回 200 + 删除**、**世界资料库 VRChat 官方面板/API 地址字段**、云同步页渲染与 7 个 provider、WebDAV 密钥 safeStorage 写入、云同步状态、高级设置（EasyTier/接收/发送/AI/AI 识图批量面板）、safeStorage 写入验证、亮色主题
+- `npm run desktop:smoke`：新品牌/标题栏、自动扫描 4 张（含 1 张 300×480 竖图、1 张横躺竖拍样张）、**横竖卡片断言（portrait=1 / landscape=3 / 首页精选竖图）**、**横躺竖拍旋转断言（卡片一键 270°、画框变竖、详情图片旋转且不溢出）**、XMP/JSON 识别 2 个世界、外观面板与动态背景（实验性黑洞/雨幕/亚克力/极光）、**视频背景卡片**、实验性开关的隐藏/显示门控、管理台概览/照片/设置（懒加载 CSS 正常）、**6 种代理模式应用与恢复**、**视频背景 IPC 写入 + `hoshikuzu-media://background/` 返回 200 + 删除**、**GitHub 更新检查 IPC（ok，latest=1.0.1；1.0.2 不提示；另用 1.0.0 版本号实测右下角横幅显示）**、**世界资料库 VRChat 官方面板/API 地址字段**、云同步页渲染与 7 个 provider、WebDAV 密钥 safeStorage 写入、云同步状态、高级设置（EasyTier/接收/发送/AI/AI 识图批量面板）、safeStorage 写入验证、亮色主题
 - `npm run desktop:smoke:onboarding`：第 1 步首启向导
 - `npm run desktop:smoke:thumbnails`：第 2 步 5 档卡片、随机样张 A/B、生成进度 17/17 并提示完成、建立 `缩略图缓存`、扫描后时间轴缩略图可显示；未滚动时网格加载 0 张、滚动后预测加载 12 张；切换实时模式仅 4 张、预先模式预取 17/17、切回预测恢复 12 张；点开详情后原图 `naturalWidth>0` 且状态显示「原图」
 - `npm run desktop:dev`：Vite + Electron 开发模式，标题栏渲染、`data-desktop` 生效、无 CSP 告警
-- `release/win-unpacked/VRchat时间轴纪念相册.exe`：1.0.1 重新打包后以 `HOSHIKUZU_SMOKE=1` 启动，完整冒烟通过（exit 0），横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、世界资料库官方面板均正常
-- `release/VRchat时间轴纪念相册-1.0.1-x64.exe` / `release/VRchat-Timeline-Album-1.0.1-portable.exe`：本轮已重新生成并上传到 GitHub Release `v1.0.1`（未签名）
+- `release/win-unpacked/VRchat时间轴纪念相册.exe`：1.0.2 重新打包后以 `HOSHIKUZU_SMOKE=1` 启动，完整冒烟通过（exit 0），横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、更新检查、世界资料库官方面板均正常
+- `release/VRchat时间轴纪念相册-1.0.2-x64.exe` / `release/VRchat-Timeline-Album-1.0.2-portable.exe`：本轮重新生成并上传到 GitHub Release `v1.0.2`（未签名）
 - 60MP（10000×6000）JPEG：扫描成功，缩略图限制为 1600×960，原图不受影响
 - 存储 CLI：14 张示例图扫描、14 张预览、统计
 - EasyTier 官方组件下载实测：v2.6.4 Windows x86_64 包下载、SHA-256 校验、解压、递归检测到 `easytier-core.exe` / `easytier-cli.exe` / `wintun.dll`，版本 2.6.4
@@ -380,6 +398,8 @@ electron-builder.yml
 - 视频背景压缩在渲染层实时完成（Canvas 30fps + MediaRecorder），时长越长耗时越接近视频本身时长；音频会被移除（背景循环不需要声音）。长视频即使压缩后仍可能占用较大空间，导入时会显示实际体积。
 - 旧版导入且没有记录 `width/height` 的照片会按横向 4:3 显示；重新扫描存储库后会补上尺寸并按真实方向显示。
 - 有些手机竖拍 / VRChat 手机相机截图会把画面以 1920×1080 横向像素保存，且没有 EXIF 旋转标记；程序无法仅凭像素尺寸判断内容方向，需要在卡片或详情里手动旋转一次。旋转角度随照片保存，重新扫描不会丢失。
+- AI 方向检测需要先在高级设置配置视觉模型（API Key + 模型）；会按张调用第三方视觉 API，产生费用。只检测 16:9 横图，低置信度（<0.45）不会自动旋转；模型误判时可用手动旋转覆盖。
+- 更新检测通过 GitHub API（经当前代理）读取最新 Release；大陆网络未配置代理时可能失败。安装包需手动下载安装，不做静默自动更新；安装包未签名。
 - VRChat 官方 API 需要登录；密码登录受 VRChat 自身风控与 2FA 限制，不保证所有账号可用。封面以 data URL 写入世界资料，数量很多时会增大 `hoshikuzu-library.json`（每张约 10–30KB）。
 - 代理测试会实际请求 VRChat `config`，网络不通时只影响测试结果；PAC 与自定义规则依赖 Chromium 规则语法。代理地址中暂不支持内嵌用户名/密码，请使用免认证的本地代理端口。
 - 银河黑洞是实验性背景，默认隐藏，需在管理台开启「实验性背景」；依赖 WebGL，不可用时回退 CSS；动态背景在 `prefers-reduced-motion` 下静态化。
@@ -411,6 +431,8 @@ electron-builder.yml
 - **照片方向**：统一用 `src/utils/orientation.ts` 的 `photoOrientation()`，不要在各组件里重复判断。新增卡片/列表样式时按 `photo-card--portrait / --landscape / --square` 给 3:4、4:3、1:1 画框；竖图卡片保持收窄并靠中轴。尺寸来自扫描器（已按 EXIF 旋转）或上传时的 naturalWidth/Height，不要手动写死 4:3。
   - `Photo.rotation`（0/90/180/270）是仅显示旋转；必须同步 `types.ts`、`albumStorage.sanitizePhoto`、`utils/orientation.ts`、`PhotoCard/Hero/PhotoDetailDialog` 与 `styles/orientation.css`。旋转后宽高交换由 `orientedDimensions` 处理，卡片用容器查询单位 `cqw/cqh` 交换 `<img>` 宽高再 `rotate()`，详情用 `object-fit: contain`。
   - 旋转不得改写原图或缩略图文件；`applyScan` 必须保留 `previous.rotation`。备份/网页同步会随 `Photo` 自动携带。
+- **AI 方向检测**：提示词只要求模型判断“头顶指向”（up/right/down/left），角度换算必须在 `parseOrientationResponse` 完成（right→270、left→90、down→180），不要依赖模型算术。`landscape` 强制 rotation=0；selfie 非零旋转置信度 <0.45 不自动应用。批量只处理无 rotation 且宽高比 1.68–1.86 的横图；改提示词后跑 `ai.test.cjs`。
+- **更新检测**：版本比较/资产选择/URL 白名单在 `desktop/services/update-check.cjs`（纯函数，跑 `update.test.cjs`）；网络与 IPC 在 `desktop/ipc/update.cjs`，必须走 `network.networkSession()` 以复用代理。只允许打开 `https://github.com/GhostQAQ-VRC/-/releases/` 下的链接；不得静默下载/安装。客户端版本号由 `package.json` 决定，发布新版本时同步 `package-lock.json` 与 Release tag。
 - **代理与 VRChat**：
   - 纯规则映射放 `desktop/services/proxy-config.cjs`，改完跑 `network.test.cjs`；Electron 会话应用放 `network.cjs`，必须同时应用到 `session.defaultSession` 与 `persist:hoshikuzu-vrchat`，并在 `setProxy` 后 `closeAllConnections`。
   - 代理测试使用 `testProxy` 后要恢复已保存配置，避免“测试但未保存”改变运行时网络。
@@ -456,9 +478,9 @@ electron-builder.yml
 代码仓库与发布：
 
 - 源码：<https://github.com/GhostQAQ-VRC/->
-- Release：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.1>
-- 安装版资产：`VRchat-Timeline-Album-1.0.1-x64-setup.exe`（111,950,501 bytes）
-- 便携版资产：`VRchat-Timeline-Album-1.0.1-portable.exe`（103,152,303 bytes）
+- Release：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.2>
+- 安装版资产：`VRchat-Timeline-Album-1.0.2-x64-setup.exe`（111,958,507 bytes）
+- 便携版资产：`VRchat-Timeline-Album-1.0.2-portable.exe`（103,148,926 bytes）
 
 包含：源码、`dist`、`desktop/**`、`build/icon.*`、README / HANDOFF / electron-builder 配置；不包含 `node_modules`、`release`、`.smoke*`、`.tmp-*`、`.zcode`。
 
@@ -466,10 +488,12 @@ electron-builder.yml
 
 ## 12. 下一个对话建议
 
-本版本已交付：网页 + Electron 客户端、独立存储库、两步首启与 5 档缩略图、三档图片加载策略、照片横竖识别与横躺竖拍旋转校正、EasyTier/P2P、AI 总结与 AI 识图 World ID、9 种动态背景（含视频背景）、实验性黑洞、紫月品牌图标、云盘/网站云同步、网络代理管理、VRChat 官方世界封面拉取。下面是下一轮建议，按优先级排列：
+本版本已交付：网页 + Electron 客户端、独立存储库、两步首启与 5 档缩略图、三档图片加载策略、照片横竖识别与横躺竖拍旋转校正、AI 方向检测（角色头顶规则 / 16:9 风景不旋转）、客户端更新提示、EasyTier/P2P、AI 总结与 AI 识图 World ID、9 种动态背景（含视频背景）、实验性黑洞、紫月品牌图标、云盘/网站云同步、网络代理管理、VRChat 官方世界封面拉取。下面是下一轮建议，按优先级排列：
 
 1. **真实环境验证（P0）**
+   - 用真实视觉模型跑一次「AI 校正方向」：验证角色头顶规则、16:9 风景不旋转、低置信度回退与批量费用；重点测试侧面自拍、多人合照、远景小人物。
    - 用真实 VRChat 账号跑一次登录（含 TOTP/邮箱 2FA）与「拉取全部封面」，分别测试系统代理 / HTTP / SOCKS5 / PAC；确认中国大陆网络下的超时与 429 提示是否清晰。
+   - 发布新版后启动旧版客户端，验证右下角更新提示、下载链接与“稍后”记忆；未配置代理时确认手动检查的错误提示。
    - 视频背景：用 1–5 分钟的 MP4/MOV 与 4K 素材各跑一次，记录压缩耗时、最终体积、画质主观评价；确认 `prefers-reduced-motion` 下只显示 poster。
    - 云同步：用真实 Google Drive OAuth 凭据、百度网盘开放平台应用各跑一次日期文件夹上传；用 123云盘客户端同步目录跑一次；再搭一个真实网站接口验证 `hoshikuzu-album-sync` 接收。
    - 两台机器加入同一 EasyTier 网络，测试 TUN/免 TUN、双机 P2P 上传、去重、4GB 大文件与防火墙。

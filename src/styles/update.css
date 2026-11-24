@@ -1,0 +1,108 @@
+/* In-app update notice (desktop only). */
+.update-notice {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(440px, calc(100vw - 32px));
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--sakura) 38%, var(--line));
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--sakura) 14%, transparent), transparent 58%),
+    var(--surface-strong);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(22px) saturate(1.2);
+  animation: update-notice-in 0.45s var(--ease-out);
+}
+
+.update-notice__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--sakura) 34%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sakura) 12%, transparent);
+  color: var(--sakura-bright);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--sakura) 18%, transparent);
+}
+
+.update-notice__copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.update-notice__copy strong {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.update-notice__copy span {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+}
+
+.update-notice__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.update-notice__close {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--faint);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.update-notice__close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+@keyframes update-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .update-notice {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    width: auto;
+    flex-wrap: wrap;
+  }
+
+  .update-notice__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-notice {
+    animation: none;
+  }
+}

@@ -11,6 +11,7 @@ import {
 import type { AlbumApi } from './useAlbum';
 import type {
   AiBatchDone,
+  AiBatchMode,
   AiBatchProgress,
   AiGenerateResult,
   AiPhotoInput,
@@ -24,7 +25,7 @@ export type AiBatchScope = 'missing' | 'all' | 'ids';
 
 export interface AiBatchState {
   running: boolean;
-  mode: 'summary' | 'worldId';
+  mode: AiBatchMode;
   current: number;
   total: number;
   done: number;
@@ -38,7 +39,7 @@ interface DesktopServicesValue {
   startAiBatch: (
     scope: AiBatchScope,
     ids?: string[],
-    mode?: 'summary' | 'worldId',
+    mode?: AiBatchMode,
   ) => Promise<{ ok: boolean; total?: number; error?: string }>;
   cancelAiBatch: () => Promise<void>;
 }
@@ -139,6 +140,14 @@ export function DesktopServicesProvider({
         }
         return;
       }
+      if (result.mode === 'orientation') {
+        if (result.ok && typeof result.rotation === 'number') {
+          albumRef.current.updatePhoto(result.id, {
+            rotation: result.rotation === 0 ? undefined : result.rotation,
+          });
+        }
+        return;
+      }
       pendingResults.current.set(result.id, result);
       if (flushTimer.current) return;
       flushTimer.current = window.setTimeout(() => {
@@ -166,6 +175,25 @@ export function DesktopServicesProvider({
           description: `识别到 ${summary.worldIds ?? 0} 个 World ID${
             summary.failed ? ` · ${summary.failed} 张未识别/失败` : ''
           }`,
+        });
+        return;
+      }
+      if (mode === 'orientation') {
+        setAiBatch({
+          running: false,
+          mode: 'orientation',
+          current: summary.total,
+          total: summary.total,
+          done: summary.done,
+          failed: summary.failed,
+          last: summary,
+        });
+        pushToast({
+          tone: summary.failed ? 'warning' : 'success',
+          title: summary.canceled ? '方向检测已停止' : 'AI 方向检测完成',
+          description: `已检测 ${summary.done} 张${
+            summary.rotated ? ` · 校正 ${summary.rotated} 张` : ''
+          }${summary.failed ? ` · ${summary.failed} 张失败` : ''}`,
         });
         return;
       }
@@ -217,13 +245,23 @@ export function DesktopServicesProvider({
   }, [bridge, flushAiResults, pushToast]);
 
   const startAiBatch = useCallback(
-    async (scope: AiBatchScope, ids?: string[], mode: 'summary' | 'worldId' = 'summary') => {
+    async (scope: AiBatchScope, ids?: string[], mode: AiBatchMode = 'summary') => {
       if (!bridge) return { ok: false, error: '仅桌面客户端可用。' };
       const idSet = new Set(ids || []);
       const photos = albumRef.current.photos.filter((photo) => {
         if (photo.mediaKind !== 'library' || photo.missing) return false;
         if (mode === 'worldId') {
           if (photo.worldId || photo.worldRef) return false;
+          if (scope === 'ids') return idSet.has(photo.id);
+          return true;
+        }
+        if (mode === 'orientation') {
+          // Only 16:9 landscape captures can be "sideways selfies". Already
+          // rotated photos and portrait/square photos are left alone.
+          if (photo.rotation) return false;
+          if (!photo.width || !photo.height) return false;
+          const ratio = photo.width / photo.height;
+          if (ratio < 1.68 || ratio > 1.86) return false;
           if (scope === 'ids') return idSet.has(photo.id);
           return true;
         }
@@ -237,7 +275,9 @@ export function DesktopServicesProvider({
           error:
             mode === 'worldId'
               ? '没有需要识别 World ID 的照片。'
-              : '没有符合条件、可以生成总结的照片。',
+              : mode === 'orientation'
+                ? '没有需要检测方向的 16:9 横图（已旋转的照片会跳过）。'
+                : '没有符合条件、可以生成总结的照片。',
         };
       }
 
@@ -256,7 +296,11 @@ export function DesktopServicesProvider({
           ok: false,
           error:
             result.error ||
-            (mode === 'worldId' ? '无法开始 World ID 识别。' : '无法开始 AI 总结。'),
+            (mode === 'worldId'
+              ? '无法开始 World ID 识别。'
+              : mode === 'orientation'
+                ? '无法开始方向检测。'
+                : '无法开始 AI 总结。'),
         };
       }
 
@@ -282,7 +326,12 @@ export function DesktopServicesProvider({
       });
       pushToast({
         tone: 'default',
-        title: mode === 'worldId' ? 'World ID 识别已开始' : 'AI 总结已开始',
+        title:
+          mode === 'worldId'
+            ? 'World ID 识别已开始'
+            : mode === 'orientation'
+              ? 'AI 方向检测已开始'
+              : 'AI 总结已开始',
         description: `共 ${items.length} 张照片，可以随时停止。`,
       });
       return { ok: true, total: items.length };

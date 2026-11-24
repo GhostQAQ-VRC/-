@@ -47,6 +47,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackgroundEffectPicker } from '../components/BackgroundEffectPicker';
 import { LibraryPanel } from './LibraryPanel';
 import { NetworkPanel } from './NetworkPanel';
+import { UpdateCard } from './UpdateCard';
 import {
   AdminPageHead,
   AdminPanel,
@@ -958,6 +959,8 @@ export function SettingsPage({ album, auth }: SettingsPageProps) {
             </div>
           </div>
         </AdminPanel>
+
+        <UpdateCard />
       </div>
 
       <AdminPanel kicker="STORAGE" title="存储概览">

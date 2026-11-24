@@ -116,6 +116,7 @@ function createAdvancedServices(options) {
     let done = 0;
     let failed = 0;
     let worldIds = 0;
+    let rotated = 0;
 
     if (!settings.primaryModel && !settings.backupModel) {
       aiBatch.running = false;
@@ -127,6 +128,7 @@ function createAdvancedServices(options) {
         failed: items.length,
         mode,
         worldIds: 0,
+        rotated: 0,
         error: '请先在高级设置中选择主模型或备用模型。',
       });
       return;
@@ -154,6 +156,15 @@ function createAdvancedServices(options) {
             apiKey,
           })
           .catch((error) => ({ ok: false, error: error.message }));
+      } else if (mode === 'orientation') {
+        result = await ai
+          .detectOrientation({
+            root,
+            item,
+            settings,
+            apiKey,
+          })
+          .catch((error) => ({ ok: false, error: error.message }));
       } else {
         result = await ai
           .summarizePhoto({
@@ -172,6 +183,7 @@ function createAdvancedServices(options) {
       if (result.ok) done += 1;
       else failed += 1;
       if (result.ok && result.worldId) worldIds += 1;
+      if (result.ok && mode === 'orientation' && result.rotation) rotated += 1;
       broadcast('ai:batch-result', {
         id: item.id,
         mode,
@@ -183,6 +195,9 @@ function createAdvancedServices(options) {
         worldId: result.worldId,
         worldName: result.worldName,
         confidence: result.confidence,
+        rotation: result.rotation,
+        orientationType: result.type,
+        head: result.head,
         error: result.error,
         generatedAt: new Date().toISOString(),
       });
@@ -199,6 +214,7 @@ function createAdvancedServices(options) {
       failed,
       mode,
       worldIds,
+      rotated,
     });
   }
 
@@ -322,6 +338,30 @@ function createAdvancedServices(options) {
       }
     });
 
+    ipcMain.handle('ai:detect-orientation', async (_event, payload = {}) => {
+      try {
+        const root = getRoot();
+        if (!root) return { ok: false, error: '存储库不可用。' };
+        if (!payload.item?.id) return { ok: false, error: '缺少照片信息。' };
+        const settings = config.readConfigSync().ai;
+        const apiKey = config.readSecret('aiApiKey') || '';
+        const result = await ai.detectOrientation({
+          root,
+          item: payload.item,
+          settings,
+          apiKey,
+        });
+        return {
+          ...result,
+          id: payload.item.id,
+          state: result.ok ? 'done' : 'error',
+          generatedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        return { ok: false, error: error.message };
+      }
+    });
+
     ipcMain.handle('ai:start-batch', async (_event, payload = {}) => {
       if (aiBatch.running) return { ok: false, error: '已有 AI 任务在运行。' };
       const items = Array.isArray(payload.items) ? payload.items.filter((item) => item?.id) : [];
@@ -331,10 +371,17 @@ function createAdvancedServices(options) {
           error:
             payload.mode === 'worldId'
               ? '没有需要识别 World ID 的照片。'
-              : '没有可生成总结的照片。',
+              : payload.mode === 'orientation'
+                ? '没有需要检测方向的 16:9 横图。'
+                : '没有可生成总结的照片。',
         };
       }
-      const mode = payload.mode === 'worldId' ? 'worldId' : 'summary';
+      const mode =
+        payload.mode === 'worldId'
+          ? 'worldId'
+          : payload.mode === 'orientation'
+            ? 'orientation'
+            : 'summary';
       aiBatch.running = true;
       aiBatch.canceled = false;
       void runAiBatch(items, mode);

@@ -72,6 +72,7 @@ export function PhotoDetailDialog({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [aiRunning, setAiRunning] = useState(false);
   const [worldRunning, setWorldRunning] = useState(false);
+  const [orientationRunning, setOrientationRunning] = useState(false);
   const [loadedOriginal, setLoadedOriginal] = useState<string | null>(null);
   const [failedOriginal, setFailedOriginal] = useState<string | null>(null);
   const photoIdRef = useRef<string | null>(null);
@@ -204,8 +205,64 @@ export function PhotoDetailDialog({
     }
   };
 
-  const recognizeWorldId = async () => {
-    if (!bridge || !photo || worldRunning) return;
+  const detectOrientationAI = async () => {
+    if (!bridge || !photo || orientationRunning) return;
+    setOrientationRunning(true);
+    try {
+      const result = await bridge.ai.detectOrientation({
+        item: {
+          id: photo.id,
+          previewPath: photo.previewPath,
+          libraryPath: photo.libraryPath,
+          capturedAt: photo.capturedAt,
+          worldName: photo.world?.name,
+          note: photo.note,
+        },
+      });
+      if (result.ok && typeof result.rotation === 'number') {
+        onUpdate(photo.id, {
+          rotation: result.rotation === 0 ? undefined : result.rotation,
+        });
+        pushToast({
+          tone: 'success',
+          title:
+            result.rotation === 0
+              ? 'AI 判断为正向风景照'
+              : 'AI 已校正照片方向',
+          description:
+            result.rotation === 0
+              ? '没有人物主体，按 16:9 风景照保持横图。'
+              : `检测到角色头顶朝 ${
+                  result.head === 'right'
+                    ? '右'
+                    : result.head === 'left'
+                      ? '左'
+                      : result.head === 'down'
+                        ? '下'
+                        : '上'
+                }，已旋转 ${result.rotation}°${result.model ? ` · ${result.model}` : ''}`,
+        });
+      } else {
+        pushToast({
+          tone: 'warning',
+          title: 'AI 未能判断方向',
+          description:
+            result.error ||
+            '请先在高级设置选择视觉模型，或使用手动旋转按钮。',
+        });
+      }
+    } catch (error) {
+      pushToast({
+        tone: 'danger',
+        title: 'AI 方向检测失败',
+        description: (error as Error).message,
+      });
+    } finally {
+      setOrientationRunning(false);
+    }
+  };
+
+  const recognizeWorldId = async () => {    if (!bridge || !photo || worldRunning) return;
     setWorldRunning(true);
     try {
       const result = await bridge.ai.recognizeWorldId({
@@ -536,6 +593,22 @@ export function PhotoDetailDialog({
               >
                 重置方向
               </button>
+              {bridge && photo.mediaKind === 'library' && !photo.missing ? (
+                <button
+                  type="button"
+                  className="button button--ghost button--tiny"
+                  onClick={() => void detectOrientationAI()}
+                  disabled={orientationRunning}
+                  title="用已配置的视觉模型判断角色头顶方向；风景照保持 16:9 不旋转"
+                >
+                  {orientationRunning ? (
+                    <Loader2 size={13} className="spinner" aria-hidden="true" />
+                  ) : (
+                    <Sparkles size={13} aria-hidden="true" />
+                  )}
+                  AI 检测方向
+                </button>
+              ) : null}
             </div>
           </section>
 

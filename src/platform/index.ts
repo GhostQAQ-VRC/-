@@ -2,6 +2,7 @@ export {
   getDesktopBridge,
   isDesktopRuntime,
   type AiBatchDone,
+  type AiBatchMode,
   type AiBatchProgress,
   type AiGenerateResult,
   type AiModelInfo,

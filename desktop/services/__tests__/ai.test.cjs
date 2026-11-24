@@ -85,6 +85,18 @@ async function startMockServer() {
           ],
         });
       }
+      if (payload.model === 'gpt-4o-orientation') {
+        return sendJson(res, 200, {
+          choices: [
+            {
+              message: {
+                content:
+                  '{"type":"selfie","head":"right","rotation":270,"confidence":0.91}',
+              },
+            },
+          ],
+        });
+      }
       const image = payload.messages?.[0]?.content?.find?.((part) => part.type === 'image_url');
       if (!image?.image_url?.url?.startsWith('data:image/jpeg;base64,')) {
         return sendJson(res, 400, { error: { message: 'missing image' } });
@@ -338,6 +350,81 @@ test('parseWorldIdResponse and recognizeWorldId read printed IDs', async () => {
     assert.equal(result.ok, true);
     assert.equal(result.worldId, 'wrld_12345678-1234-1234-1234-123456789abc');
     assert.equal(result.worldName, 'Sakura Shrine');
+  } finally {
+    await mock.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('orientation prompt encodes the head-up and 16:9 landscape rules', () => {
+  const prompt = ai.buildOrientationPrompt();
+  assert.match(prompt, /头顶/);
+  assert.match(prompt, /16:9/);
+  assert.match(prompt, /风景/);
+  assert.match(prompt, /rotation/);
+});
+
+test('parseOrientationResponse maps head direction to clockwise rotation', () => {
+  assert.deepEqual(
+    ai.parseOrientationResponse(
+      '{"type":"selfie","head":"right","rotation":270,"confidence":0.92}',
+    ),
+    { type: 'selfie', head: 'right', rotation: 270, confidence: 0.92 },
+  );
+  assert.deepEqual(
+    ai.parseOrientationResponse(
+      '```json\n{"type":"selfie","head":"left","rotation":90,"confidence":0.8}\n```',
+    ),
+    { type: 'selfie', head: 'left', rotation: 90, confidence: 0.8 },
+  );
+  assert.deepEqual(
+    ai.parseOrientationResponse('{"type":"selfie","head":"down","rotation":180}'),
+    { type: 'selfie', head: 'down', rotation: 180, confidence: 0.7 },
+  );
+  assert.deepEqual(
+    ai.parseOrientationResponse('{"type":"selfie","head":"up","rotation":0}'),
+    { type: 'selfie', head: 'up', rotation: 0, confidence: 0.7 },
+  );
+});
+
+test('parseOrientationResponse never rotates a landscape/16:9 frame', () => {
+  assert.deepEqual(
+    ai.parseOrientationResponse(
+      '{"type":"landscape","head":"none","rotation":90,"confidence":0.88}',
+    ),
+    { type: 'landscape', head: 'none', rotation: 0, confidence: 0.88 },
+  );
+  assert.equal(ai.parseOrientationResponse('not a json answer'), null);
+});
+
+test('detectOrientation applies the head-up rotation from the vision model', async () => {
+  const mock = await startMockServer();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vrchat-orientation-'));
+  try {
+    const file = path.join(root, 'sideways.png');
+    await sharp({
+      create: { width: 64, height: 48, channels: 3, background: '#aa7744' },
+    })
+      .png()
+      .toFile(file);
+    const result = await ai.detectOrientation({
+      root,
+      item: { libraryPath: 'sideways.png' },
+      settings: {
+        protocol: 'openai',
+        baseUrl: mock.baseUrl,
+        primaryModel: 'gpt-4o-orientation',
+        backupModel: '',
+        allowUnverifiedVision: false,
+      },
+      apiKey: 'test',
+      timeoutMs: 15000,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.type, 'selfie');
+    assert.equal(result.head, 'right');
+    assert.equal(result.rotation, 270);
+    assert.equal(result.confidence, 0.91);
   } finally {
     await mock.close();
     await fs.rm(root, { recursive: true, force: true });

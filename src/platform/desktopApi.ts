@@ -228,6 +228,25 @@ export interface VRChatCoverBatchResult {
   config?: VRChatConfigView;
 }
 
+export interface UpdateInfo {
+  ok: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  latestTag?: string;
+  hasUpdate: boolean;
+  name?: string;
+  notes?: string;
+  publishedAt?: string | null;
+  releaseUrl: string;
+  setupUrl?: string;
+  setupName?: string;
+  setupSize?: number;
+  portableUrl?: string;
+  portableName?: string;
+  portableSize?: number;
+  error?: string;
+}
+
 export interface DesktopAppInfo {
   app: string;
   electron: string;
@@ -408,10 +427,12 @@ export interface AiPhotoInput {
   note?: string;
 }
 
+export type AiBatchMode = 'summary' | 'worldId' | 'orientation';
+
 export interface AiGenerateResult {
   ok: boolean;
   id?: string;
-  mode?: 'summary' | 'worldId';
+  mode?: AiBatchMode;
   state?: 'done' | 'error';
   summary?: string;
   tags?: string[];
@@ -422,6 +443,10 @@ export interface AiGenerateResult {
   worldId?: string;
   worldName?: string;
   confidence?: number;
+  /** Orientation detection result. */
+  rotation?: 0 | 90 | 180 | 270;
+  orientationType?: 'selfie' | 'landscape';
+  head?: 'up' | 'right' | 'down' | 'left' | 'none';
 }
 
 export interface AiBatchProgress {
@@ -429,7 +454,7 @@ export interface AiBatchProgress {
   total: number;
   id?: string;
   state?: string;
-  mode?: 'summary' | 'worldId';
+  mode?: AiBatchMode;
 }
 
 export interface AiBatchDone {
@@ -439,8 +464,9 @@ export interface AiBatchDone {
   done: number;
   failed: number;
   error?: string;
-  mode?: 'summary' | 'worldId';
+  mode?: AiBatchMode;
   worldIds?: number;
+  rotated?: number;
 }
 
 export interface EasyTierPeer {
@@ -684,6 +710,11 @@ export interface DesktopBridge {
     cancelCovers: () => Promise<{ ok: boolean }>;
     onCoverProgress: (callback: (progress: VRChatCoverProgress) => void) => () => void;
   };
+  update: {
+    check: () => Promise<UpdateInfo>;
+    open: (url: string) => Promise<{ ok: boolean; error?: string }>;
+    onAvailable: (callback: (info: UpdateInfo) => void) => () => void;
+  };
   window: {
     minimize: () => void;
     toggleMaximize: () => void;
@@ -747,9 +778,12 @@ export interface DesktopBridge {
       item: AiPhotoInput;
       context?: { capturedAt?: string; worldName?: string; note?: string };
     }) => Promise<AiGenerateResult>;
+    detectOrientation: (payload: {
+      item: AiPhotoInput;
+    }) => Promise<AiGenerateResult>;
     startBatch: (payload: {
       items: AiPhotoInput[];
-      mode?: 'summary' | 'worldId';
+      mode?: AiBatchMode;
     }) => Promise<{
       ok: boolean;
       total?: number;
