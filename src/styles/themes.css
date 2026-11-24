@@ -1,0 +1,555 @@
+/* ---------------------------------------------------------------- *
+ * Theme presets. `twilight` is the untouched default from tokens.css.
+ * ---------------------------------------------------------------- */
+
+[data-theme="sakura"] {
+  --bg-0: #0d060c;
+  --bg-1: #140a12;
+  --bg-2: #1c0e18;
+  --ink: #fff3ed;
+  --text: #f1dfe5;
+  --muted: #c7abb8;
+  --faint: #9c7d8c;
+  --sakura: #ffb3cd;
+  --sakura-bright: #ffd7e5;
+  --sakura-deep: #d97b9d;
+  --lilac: #e3b6d2;
+  --lilac-dim: #a67e97;
+  --gold: #ffd2a3;
+  --aqua: #ffc8b8;
+  --cream: #fff2e8;
+  --line: rgba(255, 236, 244, 0.09);
+  --line-strong: rgba(255, 236, 244, 0.17);
+
+  --atmo-bg:
+    radial-gradient(68% 52% at 78% 2%, rgba(171, 75, 118, 0.28), transparent 62%),
+    radial-gradient(46% 36% at 4% 16%, rgba(255, 148, 183, 0.12), transparent 72%),
+    radial-gradient(56% 46% at 52% 102%, rgba(107, 40, 66, 0.24), transparent 70%),
+    linear-gradient(180deg, #0d060c 0%, #140a12 34%, #1a0d16 68%, #080407 100%);
+  --atmo-aurora: linear-gradient(
+    102deg,
+    transparent 26%,
+    rgba(255, 133, 178, 0.14) 44%,
+    rgba(255, 183, 148, 0.11) 54%,
+    rgba(255, 220, 200, 0.04) 63%,
+    transparent 76%
+  );
+  --atmo-glow: radial-gradient(ellipse at center, rgba(150, 70, 105, 0.2), transparent 66%);
+  --hero-aurora-bg:
+    radial-gradient(ellipse at 62% 40%, rgba(255, 130, 170, 0.16), transparent 62%),
+    radial-gradient(ellipse at 40% 60%, rgba(255, 190, 150, 0.11), transparent 60%);
+  --hero-halo-bg:
+    radial-gradient(ellipse at 60% 40%, rgba(255, 170, 200, 0.18), transparent 58%),
+    radial-gradient(ellipse at 30% 80%, rgba(255, 199, 160, 0.12), transparent 62%);
+  --hero-em-grad: linear-gradient(104deg, #ffe6ee 4%, #ffc4da 45%, #ffe3c3 96%);
+  --button-grad: linear-gradient(120deg, #ffe3ec 0%, #ffc9de 52%, #ffe6c8 100%);
+  --feature-bg: linear-gradient(158deg, rgba(50, 22, 36, 0.92), rgba(22, 10, 16, 0.96));
+  --feature-empty-bg: linear-gradient(158deg, rgba(46, 20, 32, 0.88), rgba(20, 9, 15, 0.95));
+  --photo-card-bg:
+    radial-gradient(120% 80% at 50% 0%, rgba(120, 52, 78, 0.22), transparent 62%),
+    linear-gradient(168deg, rgba(40, 20, 30, 0.9), rgba(18, 8, 14, 0.95));
+  --photo-card-border: linear-gradient(
+    152deg,
+    rgba(255, 190, 214, 0.3),
+    rgba(255, 255, 255, 0.05) 28%,
+    rgba(255, 170, 150, 0.16) 64%,
+    rgba(255, 255, 255, 0.02)
+  );
+  --header-glass: rgba(16, 7, 13, 0.74);
+  --bar-glass: rgba(28, 12, 21, 0.82);
+  --nav-glass: rgba(28, 12, 21, 0.5);
+  --plaque-glass: rgba(32, 14, 24, 0.76);
+  --footer-bg: linear-gradient(180deg, rgba(18, 8, 14, 0.28), rgba(8, 3, 6, 0.97) 55%);
+  --modal-bg: linear-gradient(170deg, #2a1420 0%, #170b13 58%, #0e060b 100%);
+  --detail-body-bg: linear-gradient(180deg, rgba(40, 20, 30, 0.6), rgba(12, 6, 10, 0.98));
+  --spine-core: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 205, 224, 0.5) 5%,
+    rgba(255, 183, 210, 0.48) 42%,
+    rgba(255, 203, 160, 0.4) 76%,
+    rgba(255, 232, 200, 0.18) 94%,
+    transparent 100%
+  );
+  --spine-glow: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255, 140, 180, 0.14) 18%,
+    rgba(255, 190, 160, 0.12) 55%,
+    rgba(255, 150, 180, 0.08) 82%,
+    transparent
+  );
+  --year-number-grad: linear-gradient(180deg, #fff7ee 6%, #ffd8e4 54%, #b98a9e 100%);
+  --admin-app-bg:
+    radial-gradient(60% 45% at 88% 0%, rgba(145, 65, 99, 0.2), transparent 62%),
+    radial-gradient(50% 40% at 4% 20%, rgba(255, 144, 174, 0.08), transparent 70%),
+    linear-gradient(180deg, #0e070c, #0b0509 70%, #060305);
+  --admin-sidebar-bg: rgba(18, 8, 14, 0.8);
+  --admin-topbar-bg: rgba(18, 8, 14, 0.74);
+  --admin-panel-bg:
+    radial-gradient(100% 80% at 0% 0%, rgba(115, 49, 73, 0.14), transparent 60%),
+    rgba(28, 13, 21, 0.64);
+  --admin-auth-bg: linear-gradient(165deg, rgba(44, 19, 31, 0.95), rgba(14, 6, 11, 0.98));
+}
+
+[data-theme="moon"] {
+  --bg-0: #050b14;
+  --bg-1: #07111e;
+  --bg-2: #0b1826;
+  --ink: #f3f8ff;
+  --text: #dfe9f7;
+  --muted: #a9bdd4;
+  --faint: #788ea8;
+  --sakura: #cfd9ff;
+  --sakura-bright: #eef4ff;
+  --sakura-deep: #8fa8dd;
+  --lilac: #a9c6ff;
+  --lilac-dim: #7d91bb;
+  --gold: #e1e9ff;
+  --aqua: #8fe3ee;
+  --cream: #f3f8ff;
+  --line: rgba(226, 240, 255, 0.09);
+  --line-strong: rgba(226, 240, 255, 0.17);
+
+  --atmo-bg:
+    radial-gradient(68% 52% at 78% 2%, rgba(72, 114, 184, 0.28), transparent 62%),
+    radial-gradient(46% 36% at 4% 16%, rgba(120, 170, 230, 0.1), transparent 72%),
+    radial-gradient(56% 46% at 52% 102%, rgba(20, 74, 92, 0.24), transparent 70%),
+    linear-gradient(180deg, #050b14 0%, #07111e 34%, #091624 68%, #03070d 100%);
+  --atmo-aurora: linear-gradient(
+    102deg,
+    transparent 26%,
+    rgba(99, 150, 230, 0.14) 44%,
+    rgba(150, 210, 235, 0.1) 54%,
+    rgba(110, 240, 230, 0.05) 63%,
+    transparent 76%
+  );
+  --atmo-glow: radial-gradient(ellipse at center, rgba(52, 92, 138, 0.22), transparent 66%);
+  --hero-aurora-bg:
+    radial-gradient(ellipse at 62% 40%, rgba(92, 140, 220, 0.18), transparent 62%),
+    radial-gradient(ellipse at 40% 60%, rgba(150, 215, 235, 0.1), transparent 60%);
+  --hero-halo-bg:
+    radial-gradient(ellipse at 60% 40%, rgba(160, 190, 255, 0.16), transparent 58%),
+    radial-gradient(ellipse at 30% 80%, rgba(100, 190, 205, 0.12), transparent 62%);
+  --hero-em-grad: linear-gradient(104deg, #eef5ff 4%, #c9d9ff 45%, #c8f1f5 96%);
+  --button-grad: linear-gradient(120deg, #eaf2ff 0%, #c7daff 52%, #bfeef1 100%);
+  --feature-bg: linear-gradient(158deg, rgba(23, 37, 62, 0.93), rgba(8, 16, 29, 0.97));
+  --feature-empty-bg: linear-gradient(158deg, rgba(20, 33, 56, 0.9), rgba(7, 14, 25, 0.96));
+  --photo-card-bg:
+    radial-gradient(120% 80% at 50% 0%, rgba(55, 86, 130, 0.22), transparent 62%),
+    linear-gradient(168deg, rgba(15, 28, 48, 0.92), rgba(6, 13, 24, 0.96));
+  --photo-card-border: linear-gradient(
+    152deg,
+    rgba(183, 209, 255, 0.3),
+    rgba(255, 255, 255, 0.05) 28%,
+    rgba(143, 227, 238, 0.16) 64%,
+    rgba(255, 255, 255, 0.02)
+  );
+  --header-glass: rgba(5, 12, 22, 0.74);
+  --bar-glass: rgba(9, 22, 38, 0.82);
+  --nav-glass: rgba(9, 22, 38, 0.5);
+  --plaque-glass: rgba(10, 24, 40, 0.76);
+  --footer-bg: linear-gradient(180deg, rgba(6, 14, 25, 0.28), rgba(2, 6, 12, 0.97) 55%);
+  --modal-bg: linear-gradient(170deg, #142238 0%, #0a1524 58%, #060c16 100%);
+  --detail-body-bg: linear-gradient(180deg, rgba(14, 29, 48, 0.62), rgba(5, 11, 20, 0.98));
+  --spine-core: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(205, 224, 255, 0.48) 5%,
+    rgba(166, 199, 255, 0.5) 42%,
+    rgba(164, 236, 244, 0.4) 76%,
+    rgba(200, 245, 255, 0.18) 94%,
+    transparent 100%
+  );
+  --spine-glow: linear-gradient(
+    180deg,
+    transparent,
+    rgba(150, 190, 255, 0.14) 18%,
+    rgba(140, 225, 240, 0.12) 55%,
+    rgba(150, 190, 255, 0.08) 82%,
+    transparent
+  );
+  --year-number-grad: linear-gradient(180deg, #f7fbff 6%, #d8e5ff 54%, #8194b5 100%);
+  --admin-app-bg:
+    radial-gradient(60% 45% at 88% 0%, rgba(56, 94, 150, 0.2), transparent 62%),
+    radial-gradient(50% 40% at 4% 20%, rgba(91, 170, 190, 0.07), transparent 70%),
+    linear-gradient(180deg, #060d18, #050a13 70%, #03060b);
+  --admin-sidebar-bg: rgba(6, 14, 25, 0.82);
+  --admin-topbar-bg: rgba(6, 14, 25, 0.74);
+  --admin-panel-bg:
+    radial-gradient(100% 80% at 0% 0%, rgba(48, 82, 128, 0.15), transparent 60%),
+    rgba(10, 23, 40, 0.64);
+  --admin-auth-bg: linear-gradient(165deg, rgba(18, 32, 53, 0.95), rgba(5, 11, 20, 0.98));
+}
+
+[data-theme="amber"] {
+  --bg-0: #100906;
+  --bg-1: #180d08;
+  --bg-2: #21130c;
+  --ink: #fff5e9;
+  --text: #f0e2d2;
+  --muted: #cbb29b;
+  --faint: #9a8371;
+  --sakura: #ffbd86;
+  --sakura-bright: #ffdcb4;
+  --sakura-deep: #d9894c;
+  --lilac: #e0b38a;
+  --lilac-dim: #a78061;
+  --gold: #ffd89a;
+  --aqua: #cde6c4;
+  --cream: #fff4e3;
+  --line: rgba(255, 240, 222, 0.09);
+  --line-strong: rgba(255, 240, 222, 0.17);
+
+  --atmo-bg:
+    radial-gradient(68% 52% at 78% 2%, rgba(168, 104, 58, 0.27), transparent 62%),
+    radial-gradient(46% 36% at 4% 16%, rgba(210, 120, 80, 0.12), transparent 72%),
+    radial-gradient(56% 46% at 52% 102%, rgba(80, 48, 32, 0.26), transparent 70%),
+    linear-gradient(180deg, #100906 0%, #180d08 34%, #20120b 68%, #080403 100%);
+  --atmo-aurora: linear-gradient(
+    102deg,
+    transparent 26%,
+    rgba(230, 150, 90, 0.14) 44%,
+    rgba(255, 195, 130, 0.11) 54%,
+    rgba(255, 235, 200, 0.04) 63%,
+    transparent 76%
+  );
+  --atmo-glow: radial-gradient(ellipse at center, rgba(135, 82, 44, 0.22), transparent 66%);
+  --hero-aurora-bg:
+    radial-gradient(ellipse at 62% 40%, rgba(220, 140, 75, 0.18), transparent 62%),
+    radial-gradient(ellipse at 40% 60%, rgba(255, 200, 140, 0.1), transparent 60%);
+  --hero-halo-bg:
+    radial-gradient(ellipse at 60% 40%, rgba(255, 196, 130, 0.16), transparent 58%),
+    radial-gradient(ellipse at 30% 80%, rgba(210, 150, 100, 0.12), transparent 62%);
+  --hero-em-grad: linear-gradient(104deg, #fff1dc 4%, #ffd0a1 45%, #ffe9bf 96%);
+  --button-grad: linear-gradient(120deg, #ffedcf 0%, #ffd2a1 52%, #e6e2bd 100%);
+  --feature-bg: linear-gradient(158deg, rgba(51, 30, 18, 0.93), rgba(22, 12, 7, 0.97));
+  --feature-empty-bg: linear-gradient(158deg, rgba(46, 27, 16, 0.9), rgba(20, 10, 6, 0.96));
+  --photo-card-bg:
+    radial-gradient(120% 80% at 50% 0%, rgba(112, 66, 36, 0.22), transparent 62%),
+    linear-gradient(168deg, rgba(40, 23, 14, 0.92), rgba(17, 9, 5, 0.96));
+  --photo-card-border: linear-gradient(
+    152deg,
+    rgba(255, 205, 150, 0.3),
+    rgba(255, 255, 255, 0.05) 28%,
+    rgba(255, 180, 110, 0.16) 64%,
+    rgba(255, 255, 255, 0.02)
+  );
+  --header-glass: rgba(18, 9, 5, 0.74);
+  --bar-glass: rgba(33, 18, 10, 0.83);
+  --nav-glass: rgba(33, 18, 10, 0.5);
+  --plaque-glass: rgba(36, 20, 11, 0.78);
+  --footer-bg: linear-gradient(180deg, rgba(18, 9, 5, 0.28), rgba(7, 3, 2, 0.97) 55%);
+  --modal-bg: linear-gradient(170deg, #2c1a10 0%, #1a0e08 58%, #0e0704 100%);
+  --detail-body-bg: linear-gradient(180deg, rgba(42, 24, 14, 0.62), rgba(13, 7, 4, 0.98));
+  --spine-core: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 222, 178, 0.48) 5%,
+    rgba(255, 190, 130, 0.48) 42%,
+    rgba(255, 210, 150, 0.4) 76%,
+    rgba(255, 240, 205, 0.18) 94%,
+    transparent 100%
+  );
+  --spine-glow: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255, 180, 110, 0.14) 18%,
+    rgba(255, 215, 160, 0.12) 55%,
+    rgba(255, 180, 110, 0.08) 82%,
+    transparent
+  );
+  --year-number-grad: linear-gradient(180deg, #fff9ef 6%, #ffe0bc 54%, #b28f6a 100%);
+  --admin-app-bg:
+    radial-gradient(60% 45% at 88% 0%, rgba(132, 82, 43, 0.2), transparent 62%),
+    radial-gradient(50% 40% at 4% 20%, rgba(214, 132, 83, 0.08), transparent 70%),
+    linear-gradient(180deg, #110906, #0c0604 70%, #060302);
+  --admin-sidebar-bg: rgba(19, 10, 6, 0.82);
+  --admin-topbar-bg: rgba(19, 10, 6, 0.74);
+  --admin-panel-bg:
+    radial-gradient(100% 80% at 0% 0%, rgba(102, 61, 32, 0.15), transparent 60%),
+    rgba(32, 18, 10, 0.64);
+  --admin-auth-bg: linear-gradient(165deg, rgba(48, 28, 16, 0.95), rgba(15, 8, 4, 0.98));
+}
+
+[data-theme="forest"] {
+  --bg-0: #040f0b;
+  --bg-1: #071611;
+  --bg-2: #0a1f18;
+  --ink: #eff8f1;
+  --text: #dcebe3;
+  --muted: #a6c0b4;
+  --faint: #7b968a;
+  --sakura: #f2b8c9;
+  --sakura-bright: #ffd8e2;
+  --sakura-deep: #cf8fa4;
+  --lilac: #a7ddc6;
+  --lilac-dim: #7fa896;
+  --gold: #e8d8a4;
+  --aqua: #9ff0d6;
+  --cream: #eff8f1;
+  --line: rgba(226, 255, 240, 0.085);
+  --line-strong: rgba(226, 255, 240, 0.16);
+
+  --atmo-bg:
+    radial-gradient(68% 52% at 78% 2%, rgba(62, 138, 108, 0.24), transparent 62%),
+    radial-gradient(46% 36% at 4% 16%, rgba(120, 200, 160, 0.09), transparent 72%),
+    radial-gradient(56% 46% at 52% 102%, rgba(24, 82, 70, 0.24), transparent 70%),
+    linear-gradient(180deg, #040f0b 0%, #071611 34%, #091c16 68%, #020806 100%);
+  --atmo-aurora: linear-gradient(
+    102deg,
+    transparent 26%,
+    rgba(75, 175, 135, 0.13) 44%,
+    rgba(125, 220, 190, 0.1) 54%,
+    rgba(240, 180, 200, 0.04) 63%,
+    transparent 76%
+  );
+  --atmo-glow: radial-gradient(ellipse at center, rgba(37, 96, 78, 0.2), transparent 66%);
+  --hero-aurora-bg:
+    radial-gradient(ellipse at 62% 40%, rgba(70, 150, 120, 0.16), transparent 62%),
+    radial-gradient(ellipse at 40% 60%, rgba(240, 180, 200, 0.08), transparent 60%);
+  --hero-halo-bg:
+    radial-gradient(ellipse at 60% 40%, rgba(140, 225, 190, 0.14), transparent 58%),
+    radial-gradient(ellipse at 30% 80%, rgba(240, 185, 205, 0.1), transparent 62%);
+  --hero-em-grad: linear-gradient(104deg, #eafff4 4%, #a7e8cd 45%, #ffd9e3 96%);
+  --button-grad: linear-gradient(120deg, #d8f7e8 0%, #aee8cf 52%, #ffd6e1 100%);
+  --feature-bg: linear-gradient(158deg, rgba(20, 45, 36, 0.93), rgba(6, 16, 13, 0.97));
+  --feature-empty-bg: linear-gradient(158deg, rgba(17, 39, 31, 0.9), rgba(5, 14, 11, 0.96));
+  --photo-card-bg:
+    radial-gradient(120% 80% at 50% 0%, rgba(45, 88, 71, 0.22), transparent 62%),
+    linear-gradient(168deg, rgba(14, 33, 26, 0.92), rgba(5, 13, 10, 0.96));
+  --photo-card-border: linear-gradient(
+    152deg,
+    rgba(180, 240, 215, 0.28),
+    rgba(255, 255, 255, 0.05) 28%,
+    rgba(242, 184, 201, 0.14) 64%,
+    rgba(255, 255, 255, 0.02)
+  );
+  --header-glass: rgba(5, 14, 10, 0.76);
+  --bar-glass: rgba(8, 25, 19, 0.83);
+  --nav-glass: rgba(8, 25, 19, 0.5);
+  --plaque-glass: rgba(9, 27, 21, 0.78);
+  --footer-bg: linear-gradient(180deg, rgba(6, 15, 11, 0.28), rgba(2, 6, 4, 0.97) 55%);
+  --modal-bg: linear-gradient(170deg, #12291f 0%, #0a1a14 58%, #050e0a 100%);
+  --detail-body-bg: linear-gradient(180deg, rgba(16, 37, 29, 0.62), rgba(4, 11, 8, 0.98));
+  --spine-core: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(207, 245, 228, 0.45) 5%,
+    rgba(160, 228, 200, 0.5) 42%,
+    rgba(242, 190, 208, 0.3) 76%,
+    rgba(220, 255, 240, 0.16) 94%,
+    transparent 100%
+  );
+  --spine-glow: linear-gradient(
+    180deg,
+    transparent,
+    rgba(130, 220, 185, 0.13) 18%,
+    rgba(240, 185, 205, 0.08) 55%,
+    rgba(130, 220, 185, 0.08) 82%,
+    transparent
+  );
+  --year-number-grad: linear-gradient(180deg, #f2fff7 6%, #cfeee0 54%, #7f9c8f 100%);
+  --admin-app-bg:
+    radial-gradient(60% 45% at 88% 0%, rgba(48, 102, 82, 0.18), transparent 62%),
+    radial-gradient(50% 40% at 4% 20%, rgba(120, 200, 160, 0.06), transparent 70%),
+    linear-gradient(180deg, #050f0b, #040b08 70%, #020604);
+  --admin-sidebar-bg: rgba(5, 15, 11, 0.82);
+  --admin-topbar-bg: rgba(5, 15, 11, 0.75);
+  --admin-panel-bg:
+    radial-gradient(100% 80% at 0% 0%, rgba(38, 80, 64, 0.15), transparent 60%),
+    rgba(8, 24, 18, 0.65);
+  --admin-auth-bg: linear-gradient(165deg, rgba(15, 38, 29, 0.95), rgba(4, 11, 8, 0.98));
+}
+
+[data-theme="dawn"] {
+  --bg-0: #fbf4e9;
+  --bg-1: #f7eadf;
+  --bg-2: #f1ded3;
+  --ink: #2b1924;
+  --text: #3b2935;
+  --muted: #6f5867;
+  --faint: #967f8c;
+  --sakura: #b24876;
+  --sakura-bright: #c65a88;
+  --sakura-deep: #8e3359;
+  --lilac: #6d5aa8;
+  --lilac-dim: #8b78b6;
+  --gold: #996722;
+  --aqua: #1f7f78;
+  --danger: #b23a4c;
+  --danger-strong: #9e2d3f;
+  --cream: #2b1924;
+  --line: rgba(64, 38, 54, 0.12);
+  --line-strong: rgba(64, 38, 54, 0.22);
+  --surface: rgba(255, 252, 247, 0.72);
+  --surface-strong: rgba(255, 251, 245, 0.95);
+  --shadow-1: 0 18px 50px rgba(80, 50, 65, 0.1);
+  --shadow-2: 0 46px 100px rgba(80, 50, 65, 0.16);
+
+  --atmo-bg:
+    radial-gradient(68% 52% at 78% 2%, rgba(255, 184, 200, 0.38), transparent 62%),
+    radial-gradient(46% 36% at 4% 16%, rgba(255, 213, 178, 0.3), transparent 72%),
+    radial-gradient(56% 46% at 52% 102%, rgba(236, 177, 196, 0.24), transparent 70%),
+    linear-gradient(180deg, #fbf4e9 0%, #f8ebe1 34%, #f4e1d6 68%, #f0dcd2 100%);
+  --atmo-aurora: linear-gradient(
+    102deg,
+    transparent 26%,
+    rgba(255, 166, 190, 0.34) 44%,
+    rgba(255, 214, 172, 0.3) 54%,
+    rgba(255, 238, 218, 0.16) 63%,
+    transparent 76%
+  );
+  --atmo-glow: radial-gradient(ellipse at center, rgba(255, 213, 188, 0.35), transparent 66%);
+  --hero-aurora-bg:
+    radial-gradient(ellipse at 62% 40%, rgba(255, 178, 198, 0.34), transparent 62%),
+    radial-gradient(ellipse at 40% 60%, rgba(255, 218, 178, 0.26), transparent 60%);
+  --hero-halo-bg:
+    radial-gradient(ellipse at 60% 40%, rgba(255, 180, 200, 0.3), transparent 58%),
+    radial-gradient(ellipse at 30% 80%, rgba(255, 214, 170, 0.22), transparent 62%);
+  --hero-em-grad: linear-gradient(104deg, #a93664 4%, #7f55a8 45%, #a26822 96%);
+  --button-grad: linear-gradient(120deg, #ffe0ea 0%, #e7d2ff 52%, #c9efe9 100%);
+  --feature-bg: linear-gradient(158deg, rgba(255, 252, 248, 0.96), rgba(249, 237, 229, 0.97));
+  --feature-empty-bg: linear-gradient(158deg, rgba(255, 252, 248, 0.94), rgba(247, 235, 227, 0.97));
+  --photo-card-bg:
+    radial-gradient(120% 80% at 50% 0%, rgba(196, 120, 150, 0.08), transparent 62%),
+    linear-gradient(168deg, rgba(255, 252, 249, 0.96), rgba(248, 237, 231, 0.97));
+  --photo-card-border: linear-gradient(
+    152deg,
+    rgba(178, 72, 118, 0.32),
+    rgba(64, 38, 54, 0.08) 35%,
+    rgba(153, 103, 34, 0.16) 68%,
+    rgba(64, 38, 54, 0.04)
+  );
+  --header-glass: rgba(252, 245, 238, 0.82);
+  --bar-glass: rgba(253, 248, 242, 0.9);
+  --nav-glass: rgba(255, 250, 245, 0.7);
+  --plaque-glass: rgba(255, 250, 246, 0.88);
+  --footer-bg: linear-gradient(180deg, rgba(250, 241, 232, 0.55), rgba(246, 234, 225, 0.95) 55%);
+  --modal-bg: linear-gradient(170deg, #fffaf5 0%, #fbf1e8 58%, #f6e9df 100%);
+  --detail-body-bg: linear-gradient(180deg, rgba(255, 250, 245, 0.95), rgba(249, 238, 231, 0.99));
+  --spine-core: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(178, 72, 118, 0.5) 5%,
+    rgba(178, 72, 118, 0.38) 42%,
+    rgba(153, 103, 34, 0.32) 76%,
+    rgba(178, 72, 118, 0.16) 94%,
+    transparent 100%
+  );
+  --spine-glow: linear-gradient(
+    180deg,
+    transparent,
+    rgba(218, 134, 162, 0.18) 18%,
+    rgba(232, 190, 150, 0.14) 55%,
+    rgba(218, 134, 162, 0.1) 82%,
+    transparent
+  );
+  --year-number-grad: linear-gradient(180deg, #3b2935 6%, #a24e6d 54%, #b1865f 100%);
+  --admin-app-bg:
+    radial-gradient(60% 45% at 88% 0%, rgba(255, 184, 196, 0.24), transparent 62%),
+    radial-gradient(50% 40% at 4% 20%, rgba(255, 216, 180, 0.2), transparent 70%),
+    linear-gradient(180deg, #fbf4eb, #f5e9e1 70%, #f0e1d7);
+  --admin-sidebar-bg: rgba(255, 250, 245, 0.86);
+  --admin-topbar-bg: rgba(253, 247, 241, 0.84);
+  --admin-panel-bg:
+    radial-gradient(100% 80% at 0% 0%, rgba(255, 225, 225, 0.24), transparent 60%),
+    rgba(255, 251, 246, 0.82);
+  --admin-auth-bg: linear-gradient(165deg, rgba(255, 250, 245, 0.97), rgba(248, 235, 228, 0.98));
+}
+
+[data-theme="daylight"] {
+  --bg-0: #f5f9ff;
+  --bg-1: #edf4fd;
+  --bg-2: #e4edf9;
+  --ink: #172437;
+  --text: #293a50;
+  --muted: #5e7188;
+  --faint: #8496ab;
+  --sakura: #3568b0;
+  --sakura-bright: #4c7fc7;
+  --sakura-deep: #254d84;
+  --lilac: #6b5bb5;
+  --lilac-dim: #8d83c6;
+  --gold: #936a26;
+  --aqua: #1d7c83;
+  --danger: #b23a4c;
+  --danger-strong: #9e2d3f;
+  --cream: #172437;
+  --line: rgba(30, 50, 75, 0.12);
+  --line-strong: rgba(30, 50, 75, 0.22);
+  --surface: rgba(250, 253, 255, 0.72);
+  --surface-strong: rgba(252, 254, 255, 0.95);
+  --shadow-1: 0 18px 50px rgba(40, 65, 95, 0.1);
+  --shadow-2: 0 46px 100px rgba(40, 65, 95, 0.16);
+
+  --atmo-bg:
+    radial-gradient(68% 52% at 78% 2%, rgba(164, 200, 255, 0.42), transparent 62%),
+    radial-gradient(46% 36% at 4% 16%, rgba(206, 190, 255, 0.28), transparent 72%),
+    radial-gradient(56% 46% at 52% 102%, rgba(168, 232, 228, 0.28), transparent 70%),
+    linear-gradient(180deg, #f8fbff 0%, #eff5fe 34%, #e7f0fb 68%, #e1ebf8 100%);
+  --atmo-aurora: linear-gradient(
+    102deg,
+    transparent 26%,
+    rgba(146, 184, 255, 0.28) 44%,
+    rgba(192, 170, 255, 0.22) 54%,
+    rgba(166, 238, 230, 0.18) 63%,
+    transparent 76%
+  );
+  --atmo-glow: radial-gradient(ellipse at center, rgba(190, 220, 255, 0.34), transparent 66%);
+  --hero-aurora-bg:
+    radial-gradient(ellipse at 62% 40%, rgba(164, 199, 255, 0.32), transparent 62%),
+    radial-gradient(ellipse at 40% 60%, rgba(198, 185, 255, 0.22), transparent 60%);
+  --hero-halo-bg:
+    radial-gradient(ellipse at 60% 40%, rgba(170, 205, 255, 0.28), transparent 58%),
+    radial-gradient(ellipse at 30% 80%, rgba(166, 240, 230, 0.2), transparent 62%);
+  --hero-em-grad: linear-gradient(104deg, #245188 4%, #6151a8 45%, #177b80 96%);
+  --button-grad: linear-gradient(120deg, #e3efff 0%, #d2e2ff 52%, #c9eff1 100%);
+  --feature-bg: linear-gradient(158deg, rgba(253, 255, 255, 0.96), rgba(236, 245, 255, 0.97));
+  --feature-empty-bg: linear-gradient(158deg, rgba(253, 255, 255, 0.94), rgba(234, 243, 253, 0.97));
+  --photo-card-bg:
+    radial-gradient(120% 80% at 50% 0%, rgba(120, 160, 215, 0.1), transparent 62%),
+    linear-gradient(168deg, rgba(253, 255, 255, 0.96), rgba(238, 246, 255, 0.97));
+  --photo-card-border: linear-gradient(
+    152deg,
+    rgba(53, 104, 176, 0.28),
+    rgba(30, 50, 75, 0.07) 35%,
+    rgba(107, 91, 181, 0.14) 68%,
+    rgba(30, 50, 75, 0.04)
+  );
+  --header-glass: rgba(248, 252, 255, 0.84);
+  --bar-glass: rgba(250, 253, 255, 0.92);
+  --nav-glass: rgba(250, 253, 255, 0.75);
+  --plaque-glass: rgba(253, 255, 255, 0.9);
+  --footer-bg: linear-gradient(180deg, rgba(238, 246, 255, 0.55), rgba(230, 241, 253, 0.95) 55%);
+  --modal-bg: linear-gradient(170deg, #fdfeff 0%, #f0f7ff 58%, #e7f1fb 100%);
+  --detail-body-bg: linear-gradient(180deg, rgba(252, 254, 255, 0.95), rgba(236, 245, 254, 0.99));
+  --spine-core: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(53, 104, 176, 0.45) 5%,
+    rgba(107, 91, 181, 0.38) 42%,
+    rgba(29, 124, 131, 0.32) 76%,
+    rgba(53, 104, 176, 0.14) 94%,
+    transparent 100%
+  );
+  --spine-glow: linear-gradient(
+    180deg,
+    transparent,
+    rgba(120, 170, 230, 0.16) 18%,
+    rgba(160, 190, 255, 0.14) 55%,
+    rgba(120, 200, 210, 0.1) 82%,
+    transparent
+  );
+  --year-number-grad: linear-gradient(180deg, #1e3149 6%, #4b6f9f 54%, #4e8a91 100%);
+  --admin-app-bg:
+    radial-gradient(60% 45% at 88% 0%, rgba(178, 210, 255, 0.3), transparent 62%),
+    radial-gradient(50% 40% at 4% 20%, rgba(206, 196, 255, 0.2), transparent 70%),
+    linear-gradient(180deg, #f8fbff, #edf4fd 70%, #e5eef9);
+  --admin-sidebar-bg: rgba(250, 253, 255, 0.88);
+  --admin-topbar-bg: rgba(248, 252, 255, 0.86);
+  --admin-panel-bg:
+    radial-gradient(100% 80% at 0% 0%, rgba(210, 230, 255, 0.28), transparent 60%),
+    rgba(252, 254, 255, 0.84);
+  --admin-auth-bg: linear-gradient(165deg, rgba(252, 254, 255, 0.97), rgba(235, 244, 253, 0.98));
+}

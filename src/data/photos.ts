@@ -1,0 +1,168 @@
+import type { Photo } from '../types';
+import { photoAsset } from '../utils/assets';
+import {
+  demoWorldToInfo,
+  MANUAL_SAMPLE_WORLD,
+  SEED_MANUAL_CAFE_KEY,
+  seedWorldKey,
+} from './worlds';
+
+const W = {
+  moonlit: 'wrld_6c1f0b2e-8a4d-4e77-9b31-2f5a7c9d0e14',
+  neon: 'wrld_aa3d9f41-2b6c-4d88-8e15-7c09b4fa2d61',
+  asteria: 'wrld_4e8b7d2a-91c5-4f3b-a6d0-58e2c1b7f903',
+  lighthouse: 'wrld_1d5f9c3b-7e42-4a61-b9d8-0c3e6f2a8457',
+  mist: 'wrld_b7c2d19e-4a63-4f08-9d51-8e2a6b4c7f30',
+  bamboo: 'wrld_9b2e6f47-3c81-4d59-8a20-5f7c1e9b3d68',
+  sakurazaka: 'wrld_5f0a8c21-6d93-4b7e-9c48-2a6f0d1e8b35',
+  snow: 'wrld_8d3c1a74-5b26-4e90-b7f3-9a4c2e6d015f',
+  festival: 'wrld_2c9b5e61-4f07-4a83-b1d5-6e8a2c9f740b',
+  observatory: 'wrld_7a4e2d90-1c65-4b8f-9e23-3d1f7b5c8a06',
+  underwater: 'wrld_3e6f8a15-9d24-4c70-8b5a-1f9e3c6d2b48',
+};
+
+export function createSamplePhotos(): Photo[] {
+  const resolved = (
+    worldId: string,
+  ): Pick<Photo, 'worldId' | 'world' | 'worldLookup' | 'worldRef'> => ({
+    worldId,
+    world: demoWorldToInfo(worldId),
+    worldRef: seedWorldKey(worldId),
+    worldLookup: 'resolved',
+  });
+
+  const photos: Photo[] = [
+    {
+      id: 'mem-shrine-2026',
+      src: photoAsset('sakura-shrine'),
+      alt: '月光下的山中鸟居与樱花，湖面泛着暖色微光',
+      capturedAt: '2026-11-16T21:34:00+08:00',
+      note: '穿过鸟居的时候，满月刚好爬上枝头。湖面很静，只有远处传来一声很轻的铃。',
+      createdAt: '2026-11-17T00:12:00+08:00',
+      ...resolved(W.moonlit),
+    },
+    {
+      id: 'mem-garden-2025',
+      src: photoAsset('moon-garden'),
+      alt: '月光下的紫色花田与樱花树，萤火点点',
+      capturedAt: '2025-04-02T22:10:00+08:00',
+      note: '第二次来花田。萤火比记忆里更近，像有人把星星放在脚边。',
+      createdAt: '2025-04-03T01:05:00+08:00',
+      ...resolved(W.moonlit),
+    },
+    {
+      id: 'mem-neon-2026',
+      src: photoAsset('neon-alley'),
+      alt: '雨夜霓虹小巷，粉色灯笼招牌与湿润街道',
+      capturedAt: '2026-11-02T23:48:00+08:00',
+      note: '雨把整条街调成了粉色。旧自行车停在关东煮店门口，我没有进去。',
+      createdAt: '2026-11-03T02:20:00+08:00',
+      ...resolved(W.neon),
+    },
+    {
+      id: 'mem-rooftop-2026',
+      src: photoAsset('rooftop'),
+      alt: '黄昏天台上的积云、电线与远处城市',
+      capturedAt: '2026-09-12T18:05:00+08:00',
+      note: '在天台等日落。云被风揉成一团，电线把天空切成几块。',
+      createdAt: '2026-09-12T20:30:00+08:00',
+      world: null,
+      worldLookup: 'none',
+    },
+    {
+      id: 'mem-asteria-2026',
+      src: photoAsset('sky-islands'),
+      alt: '漂浮在云海上的几座岛屿，点缀着灯火与瀑布',
+      capturedAt: '2026-09-22T19:22:00+08:00',
+      note: '浮空岛的灯会。瀑布落进云里，灯笼替我们指路。',
+      createdAt: '2026-09-22T23:40:00+08:00',
+      ...resolved(W.asteria),
+    },
+    {
+      id: 'mem-lighthouse-2026',
+      src: photoAsset('lighthouse'),
+      alt: '夜色中的海边灯塔，星光与光柱横过海面',
+      capturedAt: '2026-09-08T02:17:00+08:00',
+      note: '凌晨两点，灯塔的光扫过海面，像是在给星星点名。',
+      createdAt: '2026-09-08T05:02:00+08:00',
+      ...resolved(W.lighthouse),
+    },
+    {
+      id: 'mem-mist-2026',
+      src: photoAsset('torii-sunrise'),
+      alt: '日出时分的鸟居立于水面上，晨雾弥漫',
+      capturedAt: '2026-02-24T05:41:00+08:00',
+      note: '清晨五点的参道，只有我和一群飞鸟。雾还没有散。',
+      createdAt: '2026-02-24T08:10:00+08:00',
+      ...resolved(W.mist),
+    },
+    {
+      id: 'mem-bamboo-2026',
+      src: photoAsset('bamboo'),
+      alt: '月光下的竹林与萤火虫',
+      capturedAt: '2026-04-18T20:56:00+08:00',
+      note: '竹林的萤火比预想中安静。风穿过的时候，像风铃在很远的地方响。',
+      createdAt: '2026-04-18T23:30:00+08:00',
+      ...resolved(W.bamboo),
+    },
+    {
+      id: 'mem-train-2026',
+      src: photoAsset('train'),
+      alt: '黄昏的无人车站，站台灯与远处列车',
+      capturedAt: '2026-04-05T17:12:00+08:00',
+      note: '终点站的樱花开始落了。广播里在放一首很旧的车站歌。',
+      createdAt: '2026-04-05T19:45:00+08:00',
+      ...resolved(W.sakurazaka),
+    },
+    {
+      id: 'mem-snow-2026',
+      src: photoAsset('snow-village'),
+      alt: '雪夜中的小村庄，暖黄窗灯与极光',
+      capturedAt: '2026-02-11T19:30:00+08:00',
+      note: '雪把村子按了静音。只有窗里的灯还亮着，像一封封没寄出的信。',
+      createdAt: '2026-02-11T22:00:00+08:00',
+      ...resolved(W.snow),
+    },
+    {
+      id: 'mem-cafe-2024',
+      src: photoAsset('cafe'),
+      alt: '雨夜咖啡馆窗边的热可可，暖色吊灯与猫',
+      capturedAt: '2024-12-24T22:47:00+08:00',
+      note: '雨夜的热可可。猫占了对面那把椅子，我只好把书放在膝上。',
+      createdAt: '2024-12-25T00:20:00+08:00',
+      worldId: undefined,
+      world: { ...MANUAL_SAMPLE_WORLD },
+      worldRef: SEED_MANUAL_CAFE_KEY,
+      worldLookup: 'manual',
+    },
+    {
+      id: 'mem-festival-2025',
+      src: photoAsset('festival'),
+      alt: '夏夜祭的烟花在河面上空绽放',
+      capturedAt: '2025-08-30T21:15:00+08:00',
+      note: '最后一束烟花落下时，河面比天空更亮。',
+      createdAt: '2025-08-30T23:50:00+08:00',
+      ...resolved(W.festival),
+    },
+    {
+      id: 'mem-observatory-2025',
+      src: photoAsset('observatory'),
+      alt: '山顶天文台与银河星空',
+      capturedAt: '2025-06-14T01:08:00+08:00',
+      note: '天文台的穹顶开着，银河正好落在望远镜里。',
+      createdAt: '2025-06-14T03:40:00+08:00',
+      ...resolved(W.observatory),
+    },
+    {
+      id: 'mem-underwater-2024',
+      src: photoAsset('underwater'),
+      alt: '海底遗迹中的鸟居与鱼群，光束穿透海水',
+      capturedAt: '2024-06-02T18:40:00+08:00',
+      note: '沉入海底的鸟居。鱼群从它的影子里穿过，海面之上永远停在黄昏。',
+      createdAt: '2024-06-02T21:15:00+08:00',
+      ...resolved(W.underwater),
+    },
+  ];
+
+  return photos.map((photo) => ({ ...photo, isSample: true }));
+}

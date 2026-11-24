@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VRchat时间轴纪念相册">
+  <defs>
+    <linearGradient id="stardust" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd6e4" />
+      <stop offset="0.55" stop-color="#d9c1ff" />
+      <stop offset="1" stop-color="#8ee3dd" />
+    </linearGradient>
+    <radialGradient id="night" cx="34%" cy="22%" r="86%">
+      <stop offset="0" stop-color="#332352" />
+      <stop offset="0.58" stop-color="#171026" />
+      <stop offset="1" stop-color="#080611" />
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="46%" r="52%">
+      <stop offset="0" stop-color="#f3aecb" stop-opacity="0.28" />
+      <stop offset="1" stop-color="#f3aecb" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="118" fill="url(#night)" />
+  <rect width="512" height="512" rx="118" fill="url(#glow)" />
+  <circle cx="256" cy="256" r="178" fill="none" stroke="url(#stardust)" stroke-width="4" opacity="0.66" />
+  <circle cx="256" cy="256" r="152" fill="none" stroke="url(#stardust)" stroke-width="1.4" opacity="0.28" />
+
+  <path d="M322 132a126 126 0 1 0 0 248 148 148 0 1 1 0-248Z" fill="url(#stardust)" />
+  <path d="M346 158c3.4 27.5 15.5 39.6 43 43-27.5 3.4-39.6 15.5-43 43-3.4-27.5-15.5-39.6-43-43 27.5-3.4 39.6-15.5 43-43Z" fill="#fff3df" />
+
+  <circle cx="184" cy="306" r="5" fill="#fff3df" opacity="0.92" />
+  <circle cx="146" cy="238" r="3.6" fill="#f3aecb" opacity="0.95" />
+  <circle cx="366" cy="336" r="3.4" fill="#8ee3dd" opacity="0.9" />
+  <circle cx="196" cy="166" r="2.8" fill="#d9c1ff" opacity="0.8" />
+  <path d="M132 344l6 14 14 6-14 6-6 14-6-14-14-6 14-6Z" fill="#fff3df" opacity="0.55" />
+</svg>

@@ -1,0 +1,868 @@
+import type { LibraryScanResult, PhotoMetaSource, WorldInfo } from '../types';
+
+export type ImageLoadingMode = 'realtime' | 'predictive' | 'preload';
+
+export interface DesktopLibraryConfig {
+  configured: boolean;
+  libraryPath: string | null;
+  libraryName: string | null;
+  libraryId: string | null;
+  previewPreset: string;
+  previewMaxEdge: number;
+  previewQuality: number;
+  thumbnailDir: string;
+  thumbnailDirPath: string | null;
+  thumbnailsConfigured: boolean;
+  imageLoadingMode: ImageLoadingMode;
+  autoScan: boolean;
+  watch: boolean;
+  onboardingDismissed: boolean;
+  unavailable?: boolean;
+}
+
+export interface ThumbnailPresetInfo {
+  id: string;
+  maxEdge: number;
+  quality: number;
+}
+
+export interface ThumbnailSamplePreset extends ThumbnailPresetInfo {
+  bytes: number;
+  width?: number;
+  height?: number;
+  encodeMs?: number;
+  fileName: string;
+  url: string;
+}
+
+export interface ThumbnailSample {
+  fileName: string;
+  relativePath: string;
+  originalUrl: string;
+  originalBytes: number;
+  width?: number;
+  height?: number;
+  imageCount: number;
+  presets: ThumbnailSamplePreset[];
+}
+
+export interface ThumbnailSampleResult {
+  ok: boolean;
+  sample?: ThumbnailSample;
+  error?: string;
+}
+
+export interface ThumbnailSetupResult {
+  ok: boolean;
+  config?: DesktopLibraryConfig;
+  thumbnailDirPath?: string;
+  error?: string;
+}
+
+export interface DesktopScanProgress {
+  phase: 'discover' | 'index' | 'preview' | 'done' | 'error';
+  current: number;
+  total?: number;
+  message?: string;
+}
+
+export interface DesktopAlbumLoadResult {
+  configured: boolean;
+  json: string | null;
+  error?: string;
+  unavailable?: boolean;
+}
+
+export interface DesktopSaveResult {
+  configured: boolean;
+  ok: boolean;
+  error?: string;
+}
+
+export interface DesktopImportDraft {
+  src: string;
+  alt: string;
+  capturedAt: string;
+  width?: number;
+  height?: number;
+  fileBytes: number;
+  contentHash: string;
+  libraryPath: string;
+  previewPath?: string;
+  metaSource: PhotoMetaSource;
+  worldId?: string;
+  worldName?: string;
+  worldInstanceId?: string;
+  world?: WorldInfo | null;
+  managedCopy: boolean;
+}
+
+export interface DesktopImportResult {
+  ok: boolean;
+  drafts: DesktopImportDraft[];
+  errors: Array<{ file: string; message: string }>;
+  error?: string;
+  canceled?: boolean;
+}
+
+export interface PreviewProgress {
+  done: number;
+  failed: number;
+  pending: number;
+  total: number;
+  active?: number;
+}
+
+export interface DesktopLibraryStats {
+  imageCount: number;
+  libraryBytes: number;
+  previewBytes: number;
+  previewCount: number;
+  lastScanAt: string | null;
+}
+
+export interface DesktopLibraryResult {
+  ok: boolean;
+  config?: DesktopLibraryConfig;
+  error?: string;
+}
+
+export interface DesktopBackupResult {
+  ok: boolean;
+  path?: string;
+  error?: string;
+  canceled?: boolean;
+}
+
+export interface DesktopBackgroundSaveResult {
+  ok: boolean;
+  key?: string;
+  bytes?: number;
+  error?: string;
+}
+
+export type ProxyMode = 'system' | 'none' | 'http' | 'socks5' | 'pac' | 'custom';
+
+export interface ProxyConfigView {
+  mode: ProxyMode;
+  httpUrl: string;
+  socksUrl: string;
+  pacUrl: string;
+  customRules: string;
+  bypass: string;
+}
+
+export interface VRChatConfigView {
+  username: string;
+  apiBase: string;
+  hasPassword: boolean;
+}
+
+export interface NetworkConfigView {
+  proxy: ProxyConfigView;
+  vrchat: VRChatConfigView;
+  modes: ProxyMode[];
+}
+
+export interface NetworkTestResult {
+  ok: boolean;
+  status?: number;
+  mode?: string;
+  proxy?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface VRChatUserView {
+  id: string;
+  displayName: string;
+  username?: string;
+}
+
+export interface VRChatStatusView {
+  loggedIn: boolean;
+  user?: VRChatUserView | null;
+  pending2fa?: boolean;
+  methods?: string[];
+  error?: string;
+  code?: string;
+  status?: number;
+  apiBase?: string;
+}
+
+export interface VRChatLoginResult extends VRChatStatusView {
+  ok: boolean;
+  requires2fa?: boolean;
+  config?: VRChatConfigView;
+}
+
+export interface VRChatCoverResult {
+  id: string;
+  ok: boolean;
+  name?: string;
+  author?: string;
+  thumbnail?: string;
+  remoteThumbnail?: boolean;
+  description?: string;
+  capacity?: number;
+  fetchedAt?: string;
+  error?: string;
+}
+
+export interface VRChatCoverProgress {
+  current: number;
+  total: number;
+  id: string;
+  name: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface VRChatCoverBatchResult {
+  ok: boolean;
+  results?: VRChatCoverResult[];
+  canceled?: boolean;
+  needsLogin?: boolean;
+  error?: string;
+  updatedAt?: string;
+  config?: VRChatConfigView;
+}
+
+export interface DesktopAppInfo {
+  app: string;
+  electron: string;
+  chrome: string;
+  node: string;
+}
+
+export interface DesktopSyncStatus {
+  enabled: boolean;
+  provider: string;
+  lastSyncAt: string | null;
+  message: string;
+  cloud?: SyncStateView;
+  website?: SyncStateView;
+  running?: 'cloud' | 'website' | null;
+}
+
+export type SyncTarget = 'cloud' | 'website';
+export type SyncRunStatus =
+  | 'idle'
+  | 'running'
+  | 'success'
+  | 'partial'
+  | 'error'
+  | 'canceled';
+
+export interface SyncStateView {
+  lastSyncAt: string | null;
+  status: SyncRunStatus;
+  message: string;
+  uploaded: number;
+  skipped: number;
+  failed: number;
+  bytes: number;
+  errors?: string[];
+}
+
+export interface SyncProviderInfo {
+  id: string;
+  kind: 'folder' | 'webdav' | 'google' | 'baidu';
+  label: string;
+  description: string;
+}
+
+export interface SyncCloudConfigView {
+  provider: string;
+  folderRoot: string;
+  baseFolder: string;
+  skipExisting: boolean;
+  uploadMetadata: boolean;
+  webdavUrl: string;
+  webdavUsername: string;
+  googleClientId: string;
+  baiduAppKey: string;
+  baiduAppName: string;
+  hasWebdavPassword: boolean;
+  hasGoogleClientSecret: boolean;
+  hasGoogleAccessToken: boolean;
+  hasGoogleRefreshToken: boolean;
+  hasBaiduSecretKey: boolean;
+  hasBaiduAccessToken: boolean;
+  hasBaiduRefreshToken: boolean;
+}
+
+export interface SyncWebsiteConfigView {
+  endpoint: string;
+  includePreviewImages: boolean;
+  maxPayloadMb: number;
+  hasWebsiteToken: boolean;
+}
+
+export interface SyncConfigView {
+  providers: SyncProviderInfo[];
+  cloud: SyncCloudConfigView;
+  website: SyncWebsiteConfigView;
+  state: { cloud: SyncStateView; website: SyncStateView };
+  manifest: { count: number; updatedAt: string | null };
+  status: DesktopSyncStatus;
+}
+
+export interface SyncProgress {
+  target: SyncTarget;
+  phase:
+    | 'discover'
+    | 'folders'
+    | 'upload'
+    | 'metadata'
+    | 'collect'
+    | 'done'
+    | 'error';
+  current: number;
+  total: number;
+  bytes?: number;
+  bytesDone?: number;
+  dates?: number;
+  date?: string;
+  file?: string;
+  uploaded?: number;
+  skipped?: number;
+  failed?: number;
+  previews?: number;
+  canceled?: boolean;
+  message?: string;
+}
+
+export interface SyncDoneResult {
+  target: SyncTarget;
+  ok: boolean;
+  canceled?: boolean;
+  uploaded?: number;
+  skipped?: number;
+  failed?: number;
+  bytes?: number;
+  dates?: number;
+  photos?: number;
+  previews?: number;
+  errors?: string[];
+  error?: string;
+  state?: SyncStateView;
+}
+
+export interface SyncTestResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface SyncCloudConfigPatch
+  extends Partial<Omit<SyncCloudConfigView, 'hasWebdavPassword' | 'hasGoogleClientSecret' | 'hasGoogleAccessToken' | 'hasGoogleRefreshToken' | 'hasBaiduSecretKey' | 'hasBaiduAccessToken' | 'hasBaiduRefreshToken'>> {
+  webdavPassword?: string;
+  googleClientSecret?: string;
+  googleAccessToken?: string;
+  googleRefreshToken?: string;
+  baiduSecretKey?: string;
+  baiduAccessToken?: string;
+  baiduRefreshToken?: string;
+  clearWebdavPassword?: boolean;
+  clearGoogleClientSecret?: boolean;
+  clearGoogleAccessToken?: boolean;
+  clearGoogleRefreshToken?: boolean;
+  clearBaiduSecretKey?: boolean;
+  clearBaiduAccessToken?: boolean;
+  clearBaiduRefreshToken?: boolean;
+}
+
+export interface SyncWebsiteConfigPatch
+  extends Partial<Omit<SyncWebsiteConfigView, 'hasWebsiteToken'>> {
+  websiteToken?: string;
+  clearWebsiteToken?: boolean;
+}
+
+export type AiProtocol = 'openai' | 'anthropic' | 'gemini' | 'ollama';
+
+export interface AiModelInfo {
+  id: string;
+  name: string;
+  vision: boolean;
+  note?: string;
+}
+
+export interface AiSettingsView {
+  protocol: AiProtocol;
+  baseUrl: string;
+  primaryModel: string;
+  backupModel: string;
+  showAllModels: boolean;
+  allowUnverifiedVision: boolean;
+  models: AiModelInfo[];
+  modelsAt: string | null;
+  hasApiKey: boolean;
+}
+
+export interface AiPhotoInput {
+  id: string;
+  previewPath?: string;
+  libraryPath?: string;
+  capturedAt?: string;
+  worldName?: string;
+  note?: string;
+}
+
+export interface AiGenerateResult {
+  ok: boolean;
+  id?: string;
+  mode?: 'summary' | 'worldId';
+  state?: 'done' | 'error';
+  summary?: string;
+  tags?: string[];
+  model?: string;
+  usedBackup?: boolean;
+  error?: string;
+  generatedAt?: string;
+  worldId?: string;
+  worldName?: string;
+  confidence?: number;
+}
+
+export interface AiBatchProgress {
+  current: number;
+  total: number;
+  id?: string;
+  state?: string;
+  mode?: 'summary' | 'worldId';
+}
+
+export interface AiBatchDone {
+  ok: boolean;
+  canceled: boolean;
+  total: number;
+  done: number;
+  failed: number;
+  error?: string;
+  mode?: 'summary' | 'worldId';
+  worldIds?: number;
+}
+
+export interface EasyTierPeer {
+  ipv4: string;
+  hostname?: string;
+  cost: number;
+  latencyMs?: number;
+  loss?: string;
+  rx?: string;
+  tx?: string;
+  tunnel?: string;
+  nat?: string;
+  version?: string;
+  direct: boolean;
+}
+
+export interface EasyTierDetection {
+  found: boolean;
+  corePath: string | null;
+  cliPath: string | null;
+  wintun: boolean;
+  version: string | null;
+  license: string;
+  licenseUrl: string;
+  releasePage: string;
+  elevated: boolean;
+}
+
+export interface EasyTierStatusView {
+  running: boolean;
+  pid: number | null;
+  startedAt: string | null;
+  corePath: string | null;
+  cliPath: string | null;
+  elevated: boolean;
+  noTun: boolean;
+  peers: EasyTierPeer[];
+  directCount: number;
+  relayCount: number;
+  selfIp: string | null;
+  logs: Array<{ at: string; stream: string; text: string }>;
+}
+
+export interface EasyTierConfigView {
+  corePath: string;
+  cliPath: string;
+  networkName: string;
+  peers: string[];
+  ipv4: string;
+  listenerPort: number;
+  rpcPort: number;
+  autoStart: boolean;
+  noTun: boolean;
+  customArgs: string;
+  networkSecret: string;
+  hasSecret: boolean;
+  detection: EasyTierDetection | null;
+  status: EasyTierStatusView;
+  license: string;
+  licenseUrl: string;
+}
+
+export interface EasyTierLogEntry {
+  at: string;
+  stream: string;
+  text: string;
+}
+
+export interface TransferReceiverConfig {
+  enabled: boolean;
+  port: number;
+}
+
+export interface TransferStatusView {
+  running: boolean;
+  port: number;
+  startedAt: string | null;
+  requiresToken: boolean;
+}
+
+export interface TransferConfigView {
+  provider: string;
+  receiver: TransferReceiverConfig;
+  lastTarget: string;
+  token: string;
+  status: TransferStatusView;
+  localIps: string[];
+  virtualIp: string | null;
+  directCount: number;
+  relayCount: number;
+}
+
+export interface TransferProgress {
+  direction: 'send';
+  index: number;
+  total: number;
+  file: string;
+  sent: number;
+  bytes: number;
+  percent: number;
+}
+
+export interface TransferSendItem {
+  id: string;
+  name: string;
+  libraryPath: string;
+}
+
+export interface TransferSendResult {
+  ok: boolean;
+  sent: number;
+  failed: number;
+  results: Array<{
+    id: string;
+    file: string;
+    ok: boolean;
+    duplicate?: boolean;
+    error?: string;
+  }>;
+  error?: string;
+}
+
+export interface DesktopBridge {
+  version: string;
+  platform: string;
+  library: {
+    getConfig: () => Promise<DesktopLibraryConfig>;
+    chooseFolder: () => Promise<DesktopLibraryResult>;
+    createFolder: () => Promise<DesktopLibraryResult>;
+    dismissOnboarding: () => Promise<DesktopLibraryConfig>;
+    getThumbnailPresets: () => Promise<{
+      presets: ThumbnailPresetInfo[];
+      defaultId: string;
+      defaultDir: string;
+    }>;
+    sampleThumbnailPreview: () => Promise<ThumbnailSampleResult>;
+    setupThumbnails: (payload: {
+      thumbnailDir: string;
+      presetId: string;
+    }) => Promise<ThumbnailSetupResult>;
+    openFolder: () => Promise<{ ok: boolean; error?: string }>;
+    revealFile: (relativePath: string) => Promise<{ ok: boolean; error?: string }>;
+    scan: (options?: { full?: boolean }) => Promise<LibraryScanResult>;
+    cancelScan: () => Promise<{ ok: boolean }>;
+    setOptions: (options: Partial<{
+      previewPreset: string;
+      previewMaxEdge: number;
+      imageLoadingMode: ImageLoadingMode;
+      autoScan: boolean;
+      watch: boolean;
+    }>) => Promise<DesktopLibraryConfig>;
+    ignoreHashes: (hashes: string[]) => Promise<{ ok: boolean }>;
+    resetIgnored: () => Promise<{ ok: boolean }>;
+    stats: () => Promise<DesktopLibraryStats>;
+    clearPreviewCache: () => Promise<{ ok: boolean; error?: string }>;
+    onScanProgress: (callback: (progress: DesktopScanProgress) => void) => () => void;
+    onPreviewReady: (callback: (payload: Array<{ hash: string; previewPath: string }> | { hash: string; previewPath: string }) => void) => () => void;
+    onPreviewProgress: (callback: (progress: PreviewProgress) => void) => () => void;
+    onLibraryChanged: (callback: (config: DesktopLibraryConfig) => void) => () => void;
+  };
+  album: {
+    loadSync: () => DesktopAlbumLoadResult;
+    saveSync: (json: string) => DesktopSaveResult;
+    resetSync: () => DesktopSaveResult;
+  };
+  media: {
+    getPathForFile: (file: File) => string;
+    pickAndImport: () => Promise<DesktopImportResult>;
+    importFiles: (paths: string[]) => Promise<DesktopImportResult>;
+    importDataUrls: (
+      items: Array<{ name: string; dataUrl: string }>,
+    ) => Promise<DesktopImportResult>;
+    deleteManaged: (contentHash: string) => Promise<{ ok: boolean; error?: string }>;
+    urlForPreview: (previewPath: string) => string;
+    urlForOriginal: (libraryPath: string) => string;
+  };
+  backup: {
+    exportMetadata: () => Promise<DesktopBackupResult>;
+    exportFull: () => Promise<DesktopBackupResult>;
+    importFile: () => Promise<{
+      ok: boolean;
+      text?: string;
+      path?: string;
+      restored?: boolean;
+      error?: string;
+      canceled?: boolean;
+    }>;
+  };
+  background: {
+    saveVideo: (payload: {
+      name: string;
+      mime: string;
+      data: ArrayBuffer;
+    }) => Promise<DesktopBackgroundSaveResult>;
+    deleteVideo: (key: string) => Promise<{ ok: boolean; error?: string }>;
+  };
+  network: {
+    getConfig: () => Promise<NetworkConfigView>;
+    setProxy: (
+      patch: Partial<ProxyConfigView>,
+    ) => Promise<{
+      ok: boolean;
+      config: NetworkConfigView;
+      applied?: string;
+      error?: string;
+    }>;
+    test: (payload?: {
+      proxy?: Partial<ProxyConfigView>;
+      url?: string;
+    }) => Promise<NetworkTestResult>;
+  };
+  vrchat: {
+    getConfig: () => Promise<
+      VRChatConfigView & {
+        progress: { total: number; current: number; running: boolean; canceled: boolean };
+      }
+    >;
+    setConfig: (patch: {
+      username?: string;
+      apiBase?: string;
+    }) => Promise<{ ok: boolean; config: VRChatConfigView }>;
+    status: () => Promise<
+      VRChatStatusView & {
+        progress: { total: number; current: number; running: boolean; canceled: boolean };
+      }
+    >;
+    login: (payload: {
+      username?: string;
+      password?: string;
+      totp?: string;
+      remember?: boolean;
+    }) => Promise<VRChatLoginResult>;
+    verify2fa: (payload: {
+      code: string;
+      method?: 'totp' | 'emailotp';
+    }) => Promise<VRChatLoginResult>;
+    logout: () => Promise<{ ok: boolean; config: VRChatConfigView }>;
+    fetchCovers: (payload: {
+      ids: string[];
+    }) => Promise<VRChatCoverBatchResult>;
+    cancelCovers: () => Promise<{ ok: boolean }>;
+    onCoverProgress: (callback: (progress: VRChatCoverProgress) => void) => () => void;
+  };
+  window: {
+    minimize: () => void;
+    toggleMaximize: () => void;
+    close: () => void;
+    isMaximized: () => Promise<boolean>;
+    onMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
+  };
+  app: {
+    info: () => Promise<DesktopAppInfo>;
+    openExternal: (url: string) => Promise<void>;
+    onCommand: (callback: (command: string) => void) => () => void;
+  };
+  sync: {
+    getConfig: () => Promise<SyncConfigView>;
+    setConfig: (patch: {
+      cloud?: SyncCloudConfigPatch;
+      website?: SyncWebsiteConfigPatch;
+    }) => Promise<SyncConfigView>;
+    chooseFolder: () => Promise<{ ok: boolean; path?: string; canceled?: boolean }>;
+    test: (payload: { target: SyncTarget }) => Promise<SyncTestResult>;
+    start: (payload: {
+      target: SyncTarget;
+      full?: boolean;
+      album?: unknown;
+    }) => Promise<{ ok: boolean; started?: boolean; target?: SyncTarget; error?: string }>;
+    cancel: () => Promise<{ ok: boolean }>;
+    status: () => Promise<DesktopSyncStatus>;
+    resetManifest: () => Promise<{ ok: boolean; config?: SyncConfigView; error?: string }>;
+    onProgress: (callback: (progress: SyncProgress) => void) => () => void;
+    onDone: (callback: (result: SyncDoneResult) => void) => () => void;
+    onState: (callback: (payload: { target: SyncTarget; state: SyncStateView }) => void) => () => void;
+    onConfig: (callback: (config: SyncConfigView) => void) => () => void;
+    onStatus: (callback: (status: DesktopSyncStatus) => void) => () => void;
+  };
+  ai: {
+    getConfig: () => Promise<AiSettingsView>;
+    setConfig: (patch: Partial<AiSettingsView> & {
+      apiKey?: string;
+      clearKey?: boolean;
+    }) => Promise<AiSettingsView>;
+    test: (payload: {
+      protocol?: AiProtocol;
+      baseUrl?: string;
+      apiKey?: string;
+    }) => Promise<{ ok: boolean; message?: string; error?: string; models?: number; visionCount?: number }>;
+    listModels: (payload: {
+      protocol?: AiProtocol;
+      baseUrl?: string;
+      apiKey?: string;
+    }) => Promise<{
+      ok: boolean;
+      models: AiModelInfo[];
+      visionCount?: number;
+      error?: string;
+    }>;
+    generate: (payload: {
+      item: AiPhotoInput;
+      context?: { capturedAt?: string; worldName?: string; note?: string };
+    }) => Promise<AiGenerateResult>;
+    recognizeWorldId: (payload: {
+      item: AiPhotoInput;
+      context?: { capturedAt?: string; worldName?: string; note?: string };
+    }) => Promise<AiGenerateResult>;
+    startBatch: (payload: {
+      items: AiPhotoInput[];
+      mode?: 'summary' | 'worldId';
+    }) => Promise<{
+      ok: boolean;
+      total?: number;
+      error?: string;
+    }>;
+    cancelBatch: () => Promise<{ ok: boolean }>;
+    onBatchProgress: (callback: (progress: AiBatchProgress) => void) => () => void;
+    onBatchResult: (callback: (result: AiGenerateResult) => void) => () => void;
+    onBatchDone: (callback: (summary: AiBatchDone) => void) => () => void;
+  };
+  easytier: {
+    getConfig: () => Promise<EasyTierConfigView>;
+    setConfig: (patch: Partial<EasyTierConfigView> & {
+      networkSecret?: string;
+      clearSecret?: boolean;
+    }) => Promise<EasyTierConfigView>;
+    detect: () => Promise<EasyTierDetection & { status?: EasyTierStatusView }>;
+    chooseCore: () => Promise<{
+      ok: boolean;
+      canceled?: boolean;
+      detection?: EasyTierDetection;
+      config?: EasyTierConfigView;
+    }>;
+    download: () => Promise<{
+      ok: boolean;
+      canceled?: boolean;
+      corePath?: string;
+      cliPath?: string;
+      version?: string | null;
+      error?: string;
+      config?: EasyTierConfigView;
+    }>;
+    start: () => Promise<{
+      ok: boolean;
+      error?: string;
+      needsElevation?: boolean;
+      warning?: string;
+      status?: EasyTierStatusView;
+    }>;
+    stop: () => Promise<{ ok: boolean }>;
+    status: () => Promise<{
+      query: {
+        ok: boolean;
+        error?: string;
+        selfIp?: string | null;
+        rawPeers?: string;
+        rawNode?: string;
+      };
+      status: EasyTierStatusView;
+      detection: EasyTierDetection | null;
+      elevated: boolean;
+    }>;
+    test: () => Promise<{
+      ok: boolean;
+      error?: string;
+      detection?: EasyTierDetection;
+      status?: EasyTierStatusView;
+    }>;
+    logs: () => Promise<EasyTierLogEntry[]>;
+    toml: () => Promise<{ text: string; license: string; licenseUrl: string }>;
+    openFolder: () => Promise<{ ok: boolean; error?: string }>;
+    elevate: () => Promise<{ ok: boolean; quitting: boolean }>;
+    onStatus: (callback: (status: EasyTierStatusView) => void) => () => void;
+    onLog: (callback: (entry: EasyTierLogEntry) => void) => () => void;
+    onDownloadProgress: (callback: (progress: {
+      phase: string;
+      received?: number;
+      total?: number;
+      percent: number;
+    }) => void) => () => void;
+  };
+  transfer: {
+    getConfig: () => Promise<TransferConfigView>;
+    setConfig: (patch: {
+      receiver?: Partial<TransferReceiverConfig>;
+      lastTarget?: string;
+      token?: string;
+      regenerateToken?: boolean;
+    }) => Promise<TransferConfigView>;
+    startReceiver: () => Promise<{
+      ok: boolean;
+      error?: string;
+      status?: TransferStatusView;
+      config?: TransferConfigView;
+    }>;
+    stopReceiver: () => Promise<{ ok: boolean; config?: TransferConfigView }>;
+    status: () => Promise<TransferConfigView>;
+    testTarget: (payload: { target: string; token?: string }) => Promise<{
+      ok: boolean;
+      error?: string;
+      libraryName?: string | null;
+      app?: string;
+      version?: string;
+      requiresToken?: boolean;
+    }>;
+    send: (payload: {
+      target: string;
+      token: string;
+      items: TransferSendItem[];
+    }) => Promise<TransferSendResult>;
+    regenerateToken: () => Promise<TransferConfigView>;
+    onIncoming: (callback: (draft: DesktopImportDraft) => void) => () => void;
+    onProgress: (callback: (progress: TransferProgress) => void) => () => void;
+  };
+}
+
+/** Returns the preload bridge when running inside the desktop client. */
+export function getDesktopBridge(): DesktopBridge | null {
+  if (typeof window === 'undefined') return null;
+  const bridge = (window as Window & { hoshikuzu?: { desktop?: DesktopBridge } }).hoshikuzu?.desktop;
+  return bridge && bridge.version ? bridge : null;
+}
+
+export function isDesktopRuntime(): boolean {
+  return getDesktopBridge() !== null;
+}

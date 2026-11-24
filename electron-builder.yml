@@ -1,0 +1,45 @@
+appId: com.hoshikuzu.album
+productName: VRchat时间轴纪念相册
+copyright: Copyright © 2026 VRchat时间轴纪念相册
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**
+  - desktop/**
+  - package.json
+  - "!desktop/.smoke/**"
+  - "!desktop/.smoke-onboarding/**"
+  - "!desktop/.smoke-thumbnails/**"
+  - "!desktop/library/__tests__/**"
+  - "!desktop/assets/**"
+
+asar: true
+asarUnpack:
+  - node_modules/sharp/**
+  - node_modules/@img/**
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: build/icon.ico
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: VRchat时间轴纪念相册
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: VRchat-Timeline-Album-${version}-portable.exe
