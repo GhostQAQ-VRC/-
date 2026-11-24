@@ -9,6 +9,8 @@
 视觉方向是日式 ACG 的暮色旅行手帖：暮色紫、樱花粉、奶油白、星轨时间轴、玻璃质感与微光。示例照片均为本作原创插画。
 
 > 版本：**v2 数据架构 · 客户端 1.0**
+> 客户端下载：[GitHub Releases · v1.0.0](https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.0)
+> 源码仓库：[GhostQAQ-VRC/-](https://github.com/GhostQAQ-VRC/-)
 > 公开相册：`#/`
 > 管理台：`#/admin`
 > 高级设置：`#/admin/advanced`（客户端）

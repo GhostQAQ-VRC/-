@@ -34,9 +34,10 @@
 - 照片卡片：**按原图横竖方向自适应画框**（3:4 / 4:3 / 1:1）
 - 默认外观：**暮色紫 · 星轨交错 · 星轨**（7 主题 × 4 布局）
 - `npm run build` 已通过；`npm run test:desktop` **33 项通过**
-- 客户端冒烟已通过（含横竖卡片、视频背景 IPC/协议、代理模式、世界资料库官方面板）；`release/win-unpacked` 已用本轮代码重新打包并启动冒烟通过；NSIS/便携版尚未重新生成，发布前请执行 `npm run desktop:dist:local`
-- 上一版 `release/` 安装包（不含本轮改动，`win-unpacked` 已更新）：
-  - `VRchat时间轴纪念相册-1.0.0-x64.exe`（NSIS，约 107MB，未签名）
+- 客户端冒烟已通过（含横竖卡片、视频背景 IPC/协议、代理模式、世界资料库官方面板）；`release/win-unpacked` 已用本轮代码重新打包并启动冒烟通过；NSIS + 便携版已重新生成并上传到 GitHub Release `v1.0.0`
+- GitHub 仓库：<https://github.com/GhostQAQ-VRC/->
+- Release 下载：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.0>
+  - `VRchat-Timeline-Album-1.0.0-x64-setup.exe`（NSIS，约 107MB，未签名）
   - `VRchat-Timeline-Album-1.0.0-portable.exe`（便携版，约 99MB）
 
 ---
@@ -330,7 +331,7 @@ electron-builder.yml
 - `npm run desktop:smoke:thumbnails`：第 2 步 5 档卡片、随机样张 A/B、生成进度 17/17 并提示完成、建立 `缩略图缓存`、扫描后时间轴缩略图可显示；未滚动时网格加载 0 张、滚动后预测加载 12 张；切换实时模式仅 4 张、预先模式预取 17/17、切回预测恢复 12 张；点开详情后原图 `naturalWidth>0` 且状态显示「原图」
 - `npm run desktop:dev`：Vite + Electron 开发模式，标题栏渲染、`data-desktop` 生效、无 CSP 告警
 - `release/win-unpacked/VRchat时间轴纪念相册.exe`：本轮 `desktop:pack` 重新打包后以 `HOSHIKUZU_SMOKE=1` 启动，完整冒烟通过（exit 0），横竖卡片、视频背景 IPC/协议、代理模式、世界资料库官方面板均正常
-- `release/VRchat时间轴纪念相册-1.0.0-x64.exe` / `release/VRchat-Timeline-Album-1.0.0-portable.exe`：上一版产物（未签名，不含本轮功能；发布前跑 `desktop:dist:local`）
+- `release/VRchat时间轴纪念相册-1.0.0-x64.exe` / `release/VRchat-Timeline-Album-1.0.0-portable.exe`：本轮已重新生成并上传到 GitHub Release `v1.0.0`（未签名）
 - 60MP（10000×6000）JPEG：扫描成功，缩略图限制为 1600×960，原图不受影响
 - 存储 CLI：14 张示例图扫描、14 张预览、统计
 - EasyTier 官方组件下载实测：v2.6.4 Windows x86_64 包下载、SHA-256 校验、解压、递归检测到 `easytier-core.exe` / `easytier-cli.exe` / `wintun.dll`，版本 2.6.4
@@ -444,6 +445,13 @@ electron-builder.yml
 `G:/AI/Zcode/网页/_backups/时光轴相册DS4.1F_云同步交接_20261125_0607.tar.gz`（约 2.5MB）
 
 本轮交付前如需归档，请按同样范围重新打包到 `../_backups/`。
+
+代码仓库与发布：
+
+- 源码：<https://github.com/GhostQAQ-VRC/->
+- Release：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.0>
+- 安装版资产：`VRchat-Timeline-Album-1.0.0-x64-setup.exe`（111,950,504 bytes）
+- 便携版资产：`VRchat-Timeline-Album-1.0.0-portable.exe`（103,149,496 bytes）
 
 包含：源码、`dist`、`desktop/**`、`build/icon.*`、README / HANDOFF / electron-builder 配置；不包含 `node_modules`、`release`、`.smoke*`、`.tmp-*`、`.zcode`。
 
