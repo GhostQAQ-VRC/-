@@ -16,7 +16,7 @@
 - **更新检测（1.0.2）**：桌面客户端启动后通过当前代理请求 GitHub `releases/latest`，发现更高版本时右下角弹出「发现新版本」，可下载安装包或查看更新说明；站点设置新增「检查更新」卡片。版本比较、仓库 URL 白名单与安装包选择有单测；按版本记住“稍后”，不会重复打扰。
 - **网络代理管理**：管理台 → 站点设置新增「网络代理」。模式：跟随系统 / 不使用 / HTTP / SOCKS5 / PAC / 自定义规则，可设置绕过地址、测试连通性。代理同时应用到默认会话与 VRChat 专用持久会话；测试后自动恢复已保存配置。
 - **VRChat 官方世界封面**：世界资料库新增「从 VRChat 拉取世界封面」。登录官方账号（支持 TOTP / 邮箱 2FA）后批量读取所有有效 `wrld_…` 的名称、作者、简介、人数与封面；封面压缩为 512px WebP data URL 写回 `WorldLibraryEntry.thumbnail`，离线可显示。密码可选 safeStorage 记住，登出清除。
-- **验证**：`npm run build` 通过；`npm run test:desktop` **41 项通过**（代理 5 + 方向解析 3 + AI 方向 mock 1 + 更新检测 4）；`npm run desktop:smoke` 通过，新增横竖卡片断言、**横躺竖拍样张旋转断言（卡片 + 详情）**、视频背景 IPC + `hoshikuzu-media://background` 200、代理 6 模式应用/恢复、**GitHub 更新检查 IPC（ok，latest 1.0.1）**、世界资料库官方面板渲染与 `01c-rotation.png` / `01d-rotation-detail.png` / `03f-worlds.png` / `01b-timeline.png` 截图；更新横幅用 1.0.0 版本号实测显示正常。
+- **验证**：`npm run build` 通过；`npm run test:desktop` **41 项通过**（代理 5 + 方向解析 3 + AI 方向 mock 1 + 更新检测 4）；`npm run desktop:smoke` 通过，新增横竖卡片断言、**横躺竖拍样张旋转断言（卡片 + 详情）**、视频背景 IPC + `hoshikuzu-media://background` 200、代理 6 模式应用/恢复、**GitHub 更新检查 IPC（ok，latest=1.0.2；与当前版本相同不提示）**、世界资料库官方面板渲染与 `01c-rotation.png` / `01d-rotation-detail.png` / `03f-worlds.png` / `01b-timeline.png` 截图；更新横幅用 1.0.0 版本号实测显示正常。
 - **接手顺序**：第 2 节恢复命令 → 第 4 节存储库/配置 → 第 8 节验证状态 → 第 10 节改动约束。默认外观「暮色紫 · 星轨交错 · 星轨」不要破坏。
 
 ---
@@ -328,7 +328,7 @@ electron-builder.yml
 22. **AI 方向检测与更新提示（1.0.2）**：
    - AI 方向：`ai.cjs` 新增 `buildOrientationPrompt` / `parseOrientationResponse` / `detectOrientation`。提示词明确「只看角色头顶（发旋/耳朵上方）朝向，不判断面朝哪边；没有人物主体时按 16:9 风景处理 rotation=0」。解析器只信 `head` 并自行换算（right→270、left→90、down→180），低置信度（<0.45）不自动改。IPC `ai:detect-orientation` 与批量 `mode='orientation'`；只处理无 rotation 且宽高比 1.68–1.86 的横图。详情页「AI 检测方向」，AI 面板「AI 校正方向」批量按钮与进度。
    - 更新提示：`update-check.cjs` 纯函数（版本比较、仓库 URL 白名单、setup/portable 资产选择）+ `ipc/update.cjs`（经 `network.networkSession()` 请求 GitHub `releases/latest`，15s 超时、5 分钟缓存、启动 4.5s 后检查、smoke 跳过自动检查）；`UpdateNotice` 右下角横幅显示版本/体积/下载/说明/稍后，按版本记录 dismissed；设置页 `UpdateCard` 手动检查。
-   - 单测新增 8 项（AI 方向解析 3、AI 方向 mock 1、更新检测 4；总计 41 项）；冒烟 `settings extras` 验证 `update.check()` 返回 ok 且 latest=1.0.1，并用 1.0.0 版本号实测右下角更新横幅。
+   - 单测新增 8 项（AI 方向解析 3、AI 方向 mock 1、更新检测 4；总计 41 项）；冒烟 `settings extras` 验证 `update.check()` 返回 ok 且 latest=1.0.2，并用 1.0.0 版本号实测右下角更新横幅。
 
 ---
 
@@ -348,7 +348,7 @@ electron-builder.yml
   - AI：四协议端点/请求体、模型列表、视觉过滤、JSON 解析、主备切换、World ID 响应解析与识图识别（本地 mock，无真实 Key）
   - 传输：本地接收/发送、令牌 401、重复去重、路径安全
   - EasyTier：组件资产选择、启动参数、TOML、状态解析、自定义参数
-- `npm run desktop:smoke`：新品牌/标题栏、自动扫描 4 张（含 1 张 300×480 竖图、1 张横躺竖拍样张）、**横竖卡片断言（portrait=1 / landscape=3 / 首页精选竖图）**、**横躺竖拍旋转断言（卡片一键 270°、画框变竖、详情图片旋转且不溢出）**、XMP/JSON 识别 2 个世界、外观面板与动态背景（实验性黑洞/雨幕/亚克力/极光）、**视频背景卡片**、实验性开关的隐藏/显示门控、管理台概览/照片/设置（懒加载 CSS 正常）、**6 种代理模式应用与恢复**、**视频背景 IPC 写入 + `hoshikuzu-media://background/` 返回 200 + 删除**、**GitHub 更新检查 IPC（ok，latest=1.0.1；1.0.2 不提示；另用 1.0.0 版本号实测右下角横幅显示）**、**世界资料库 VRChat 官方面板/API 地址字段**、云同步页渲染与 7 个 provider、WebDAV 密钥 safeStorage 写入、云同步状态、高级设置（EasyTier/接收/发送/AI/AI 识图批量面板）、safeStorage 写入验证、亮色主题
+- `npm run desktop:smoke`：新品牌/标题栏、自动扫描 4 张（含 1 张 300×480 竖图、1 张横躺竖拍样张）、**横竖卡片断言（portrait=1 / landscape=3 / 首页精选竖图）**、**横躺竖拍旋转断言（卡片一键 270°、画框变竖、详情图片旋转且不溢出）**、XMP/JSON 识别 2 个世界、外观面板与动态背景（实验性黑洞/雨幕/亚克力/极光）、**视频背景卡片**、实验性开关的隐藏/显示门控、管理台概览/照片/设置（懒加载 CSS 正常）、**6 种代理模式应用与恢复**、**视频背景 IPC 写入 + `hoshikuzu-media://background/` 返回 200 + 删除**、**GitHub 更新检查 IPC（ok，latest=1.0.2；当前 1.0.2 不提示；另用 1.0.0 版本号实测右下角横幅显示）**、**世界资料库 VRChat 官方面板/API 地址字段**、云同步页渲染与 7 个 provider、WebDAV 密钥 safeStorage 写入、云同步状态、高级设置（EasyTier/接收/发送/AI/AI 识图批量面板）、safeStorage 写入验证、亮色主题
 - `npm run desktop:smoke:onboarding`：第 1 步首启向导
 - `npm run desktop:smoke:thumbnails`：第 2 步 5 档卡片、随机样张 A/B、生成进度 17/17 并提示完成、建立 `缩略图缓存`、扫描后时间轴缩略图可显示；未滚动时网格加载 0 张、滚动后预测加载 12 张；切换实时模式仅 4 张、预先模式预取 17/17、切回预测恢复 12 张；点开详情后原图 `naturalWidth>0` 且状态显示「原图」
 - `npm run desktop:dev`：Vite + Electron 开发模式，标题栏渲染、`data-desktop` 生效、无 CSP 告警
