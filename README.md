@@ -63,8 +63,8 @@ npm run desktop:dist       # NSIS 安装包 + 便携版
 
 当前构建产物（`release/`）：
 
-- `VRchat时间轴纪念相册-1.0.0-x64.exe`：NSIS 安装包（未签名）
-- `VRchat-Timeline-Album-1.0.0-portable.exe`：便携版
+- `VRchat时间轴纪念相册-1.0.2-x64.exe`：NSIS 安装包（未签名）
+- `VRchat-Timeline-Album-1.0.2-portable.exe`：便携版
 - `win-unpacked/`：免安装目录
 
 存储库结构、EasyTier/P2P、AI 协议、密钥存储与安全说明见 [desktop/README.md](desktop/README.md)。

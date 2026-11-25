@@ -7,7 +7,7 @@
 
 ---
 
-## 0. 本轮交付摘要（下一个对话先读）
+## 0. 最近交付摘要（1.0.0 → 1.0.2，下一个对话先读）
 
 - **视频背景**：背景特效新增「视频背景」。导入 MP4 / WebM / MOV 等常见视频，客户端自动判断是否需要压缩；体积大或容器不友好时在渲染层用 Canvas + MediaRecorder 重编码为 VP9/VP8 WebM，**去除音轨（画面无损）**、长边限制 1920px、按目标体积选择最高码率，必要时二次降码率；客户端存 `<库>/.hoshikuzu/backgrounds/<sha1>.webm` 并通过 `hoshikuzu-media://background/` 播放，网页版存 IndexedDB。首帧 poster 随设置保存，视频解码前/失败时显示。
 - **照片横竖识别**：新增 `PhotoOrientation` 与 `utils/orientation.ts`，用 `width/height`（扫描时已按 EXIF 旋转）区分 portrait / landscape / square。时间轴卡片、画廊、密排相册、首页精选卡片都按方向使用 3:4 / 4:3 / 1:1 画框；竖图卡片会收窄并靠近中轴，不再统一裁成 4:3。
@@ -18,6 +18,16 @@
 - **VRChat 官方世界封面**：世界资料库新增「从 VRChat 拉取世界封面」。登录官方账号（支持 TOTP / 邮箱 2FA）后批量读取所有有效 `wrld_…` 的名称、作者、简介、人数与封面；封面压缩为 512px WebP data URL 写回 `WorldLibraryEntry.thumbnail`，离线可显示。密码可选 safeStorage 记住，登出清除。
 - **验证**：`npm run build` 通过；`npm run test:desktop` **41 项通过**（代理 5 + 方向解析 3 + AI 方向 mock 1 + 更新检测 4）；`npm run desktop:smoke` 通过，新增横竖卡片断言、**横躺竖拍样张旋转断言（卡片 + 详情）**、视频背景 IPC + `hoshikuzu-media://background` 200、代理 6 模式应用/恢复、**GitHub 更新检查 IPC（ok，latest=1.0.2；与当前版本相同不提示）**、世界资料库官方面板渲染与 `01c-rotation.png` / `01d-rotation-detail.png` / `03f-worlds.png` / `01b-timeline.png` 截图；更新横幅用 1.0.0 版本号实测显示正常。
 - **接手顺序**：第 2 节恢复命令 → 第 4 节存储库/配置 → 第 8 节验证状态 → 第 10 节改动约束。默认外观「暮色紫 · 星轨交错 · 星轨」不要破坏。
+
+### 当前现场状态（2026-11-25）
+
+- 最新客户端 **1.0.2**，GitHub Release `v1.0.2` 为 latest；**更新提示从 1.0.2 才开始生效**，1.0.1 及更早版本没有更新检测，需要手动安装一次 1.0.2。
+- 开发机用户实际运行便携版：配置在 `release/data/config.json`，存储库为 `C:\Users\DMSSD\OneDrive\图片\VRChat`（203 张 PNG：134 横 / 45 竖 / 24 方）。
+- 用户反馈的“横躺竖拍”样例：`2026-11\VRChat_2026-11-24_08-36-03.925_1920x1080.png`。文件是 1920×1080 像素、无 EXIF、内容被横向旋转；1.0.2 已提供卡片一键向左 90°、详情左右旋转和 AI 方向检测。开发端未改写用户相册数据，需用户在客户端点一次旋转或运行 AI 检测。
+- 便携版配置里已有 `aiApiKey`，但 `ai.baseUrl`、`ai.primaryModel` 为空、`ai.models=[]`；使用 AI 方向前需在高级设置获取模型并选择视觉模型。
+- GitHub 仓库 `GhostQAQ-VRC/-`；本机 Git Credential Manager 已登录 `GhostQAQ-VRC`，系统代理 `127.0.0.1:32437` 可访问 GitHub（源码 push 与 Release 资产上传均通过它）。
+- 发布方式：源码 push `main`；安装包作为 Release 资产（setup 约 107MB，超过 git 单文件 100MB 限制，不能提交进仓库）；当前 tag `v1.0.2`。
+- 尚未验证：真实 VRChat 账号登录/封面拉取、真实视觉模型的 AI 方向检测、长视频压缩实测、NSIS 实际安装、代码签名/自动安装。
 
 ---
 
@@ -38,12 +48,12 @@
 - 客户端更新：**启动自动检查 GitHub Release**，发现新版本弹出下载提示；设置页可手动检查
 - AI 方向：**按角色头顶朝上 / 16:9 风景不旋转的规则**，用视觉模型单张或批量校正方向
 - 默认外观：**暮色紫 · 星轨交错 · 星轨**（7 主题 × 4 布局）
-- `npm run build` 已通过；`npm run test:desktop` **33 项通过**
+- `npm run build` 已通过；`npm run test:desktop` **41 项通过**
 - 客户端冒烟已通过（含横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、更新检查、世界资料库官方面板）；`release/win-unpacked` 已用 1.0.2 代码重新打包并启动冒烟通过；NSIS + 便携版已重新生成并上传到 GitHub Release `v1.0.2`
 - GitHub 仓库：<https://github.com/GhostQAQ-VRC/->
 - Release 下载：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.2>
-  - `VRchat-Timeline-Album-1.0.0-x64-setup.exe`（NSIS，约 107MB，未签名）
-  - `VRchat-Timeline-Album-1.0.0-portable.exe`（便携版，约 99MB）
+  - `VRchat-Timeline-Album-1.0.2-x64-setup.exe`（NSIS，约 107MB，未签名）
+  - `VRchat-Timeline-Album-1.0.2-portable.exe`（便携版，约 99MB）
 
 ---
 
@@ -489,6 +499,8 @@ electron-builder.yml
 ## 12. 下一个对话建议
 
 本版本已交付：网页 + Electron 客户端、独立存储库、两步首启与 5 档缩略图、三档图片加载策略、照片横竖识别与横躺竖拍旋转校正、AI 方向检测（角色头顶规则 / 16:9 风景不旋转）、客户端更新提示、EasyTier/P2P、AI 总结与 AI 识图 World ID、9 种动态背景（含视频背景）、实验性黑洞、紫月品牌图标、云盘/网站云同步、网络代理管理、VRChat 官方世界封面拉取。下面是下一轮建议，按优先级排列：
+
+接手第一件事：确认用户已运行 **1.0.2+**。如果仍是 1.0.1，它没有更新检测，需要引导手动安装 1.0.2；用户 2026-11-24 08:35/08:36 的几张 1920×1080 横躺竖拍照片仍需要一次手动旋转或 AI 方向检测。AI 方向需要先配置视觉模型（当前便携配置只有 API Key，没有模型/Base URL）。
 
 1. **真实环境验证（P0）**
    - 用真实视觉模型跑一次「AI 校正方向」：验证角色头顶规则、16:9 风景不旋转、低置信度回退与批量费用；重点测试侧面自拍、多人合照、远景小人物。
