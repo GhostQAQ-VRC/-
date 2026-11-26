@@ -537,9 +537,9 @@ electron-builder.yml
 
 ## 11. 备份
 
-最新完整备份（含源码、`.git` 历史、`dist`、Android 工程与 APK；不含 `node_modules`、`release`、`.smoke*`、`tools/shots`、`.zcode`、Android 构建缓存）：
+最新**全量源码备份**（含桌面/网页/Android 源码、`.git` 历史、`dist`、Android 工程与 APK；不含 `node_modules`、`release`、`.smoke*`、`tools/shots`、`.zcode`、Android 构建缓存）：
 
-`G:/AI/Zcode/网页/_backups/时光轴相册DS4.1F_手机客户端_1.1.1_20261126_1052.tar.gz`（约 17MB）
+`G:/AI/Zcode/网页/_backups/时光轴相册DS4.1F_全量源码_1.1.1_20261126_1052.tar.gz`（约 17MB）
 
 恢复：解压到 `G:/AI/Zcode/网页/`，执行 `npm install`；Release 里的安装包不包含在备份内。
 
@@ -555,6 +555,8 @@ electron-builder.yml
   - `VRchat-Timeline-Album-Mobile-1.1.1.apk.sha256`
 
 备份包含：`src/`、`desktop/`、`mobile-android/`（源码、Gradle wrapper、APK）、`public/`、`dist/`、`build/icon.*`、`tools/`、README / HANDOFF / 配置与 `.git` 历史。
+
+发布包二进制单独备份在 `G:/AI/Zcode/网页/_backups/时光轴相册DS4.1F_1.1.1_发布包/`（桌面 setup + portable + APK + `SHA256SUMS.txt` + `发布说明.txt`，约 211MB）。
 
 ---
 
