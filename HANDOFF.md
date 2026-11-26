@@ -537,20 +537,24 @@ electron-builder.yml
 
 ## 11. 备份
 
-最新交接备份（上一轮云同步交付时生成，不含本轮视频/代理/VRChat 改动）：
+最新完整备份（含源码、`.git` 历史、`dist`、Android 工程与 APK；不含 `node_modules`、`release`、`.smoke*`、`tools/shots`、`.zcode`、Android 构建缓存）：
 
-`G:/AI/Zcode/网页/_backups/时光轴相册DS4.1F_云同步交接_20261125_0607.tar.gz`（约 2.5MB）
+`G:/AI/Zcode/网页/_backups/时光轴相册DS4.1F_手机客户端_1.1.1_20261126_1052.tar.gz`（约 17MB）
 
-本轮交付前如需归档，请按同样范围重新打包到 `../_backups/`。
+恢复：解压到 `G:/AI/Zcode/网页/`，执行 `npm install`；Release 里的安装包不包含在备份内。
 
 代码仓库与发布：
 
 - 源码：<https://github.com/GhostQAQ-VRC/->
-- Release：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.2>
-- 安装版资产：`VRchat-Timeline-Album-1.0.2-x64-setup.exe`（111,958,507 bytes）
-- 便携版资产：`VRchat-Timeline-Album-1.0.2-portable.exe`（103,148,926 bytes）
+- 当前提交：`d18d50d`（功能提交 `117fe08`，tag `v1.1.1`）
+- Release：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.1.1>
+- 资产：
+  - `VRchat-Timeline-Album-Mobile-1.1.1.apk`（4,602,653 bytes）
+  - `VRchat-Timeline-Album-1.1.1-portable.exe`（103,384,607 bytes）
+  - `VRchat-Timeline-Album-1.1.1-x64-setup.exe`（112,234,411 bytes）
+  - `VRchat-Timeline-Album-Mobile-1.1.1.apk.sha256`
 
-包含：源码、`dist`、`desktop/**`、`build/icon.*`、README / HANDOFF / electron-builder 配置；不包含 `node_modules`、`release`、`.smoke*`、`.tmp-*`、`.zcode`。
+备份包含：`src/`、`desktop/`、`mobile-android/`（源码、Gradle wrapper、APK）、`public/`、`dist/`、`build/icon.*`、`tools/`、README / HANDOFF / 配置与 `.git` 历史。
 
 ---
 
