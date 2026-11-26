@@ -2,13 +2,13 @@
 
 面向 VRChat 旅人的 **本地优先时光相册**。整理、回看与记录在世界之间拍下的照片，按时间轴浏览，为照片关联世界资料，并通过独立管理台维护照片、世界资料、站点文案与数据备份。
 
-桌面客户端额外提供 **EasyTier 虚拟组网 P2P 传图** 与 **AI 视觉模型回忆总结**；网页版保持相同的相册界面与本地优先逻辑。
+桌面客户端额外提供 **EasyTier 虚拟组网 P2P 传图**、**AI 视觉模型回忆总结** 与 **局域网手机客户端**；网页版保持相同的相册界面与本地优先逻辑。
 
 外观提供 7 套配色、4 种时间轴布局与 **9 种动态背景**（星轨、雨幕、亚克力、实验性银河黑洞、樱吹雪、极光、萤火、自定义图片、循环视频）。银河黑洞默认隐藏，需要在管理台开启「实验性背景」后才会出现在背景列表中。客户端还提供 **网络代理管理** 与 **VRChat 官方世界封面拉取**。
 
 视觉方向是日式 ACG 的暮色旅行手帖：暮色紫、樱花粉、奶油白、星轨时间轴、玻璃质感与微光。示例照片均为本作原创插画。
 
-> 版本：**v2 数据架构 · 客户端 1.0**
+> 版本：**v2 数据架构 · 客户端 1.1（手机测试版）**
 > 客户端下载：[GitHub Releases](https://github.com/GhostQAQ-VRC/-/releases/latest)
 > 源码仓库：[GhostQAQ-VRC/-](https://github.com/GhostQAQ-VRC/-)
 > 公开相册：`#/`
@@ -43,6 +43,8 @@ npm run preview  # 预览 dist
 - **三档图片加载策略**：实时加载（视口附近）、预测加载（默认，按滚动方向预取约 10–20 张并按显存预算收缩）、预先加载（后台预取全部缩略图字节，不提前解码）；离开视野自动释放解码内存，降低 GPU/CPU 占用；
 - **EasyTier 虚拟组网**：检测/手动选择/一键下载组件，网络名称、密钥、Peer 列表、虚拟 IP、启动/状态/日志；
 - **P2P 传图**：接收端分享码、好友地址测试、原图流式发送、收到后自动入库并识别日期/World ID；
+- **手机客户端（局域网）**：管理台「手机同步」开启后显示二维码；手机扫码进入 `/m` 手机版，实时读取桌面相册。相册卡片长按上滑可投送照片到手机；接收方式可选「实时查看」（电脑临时当服务器，不占手机空间）或「保存到手机」（下载原图）。手机与电脑需在同一 Wi-Fi，不经过互联网；
+- **Android APK**：`mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.0.apk`。原生连接页支持扫码/手动地址，配对后加载手机版；保存原图通过原生桥写入 `下载/Hoshikuzu/`。APK 仍需电脑端开启手机同步；
 - **AI 图像总结**：OpenAI 兼容 / Anthropic / Gemini / Ollama，一键拉取模型、主/备模型、视觉模型限制、批量生成回忆总结；
 - **AI 方向检测**：按「角色自拍时头顶朝上；没有人物时按 16:9 风景照不旋转」的规则调用视觉模型，支持单张与 16:9 横图批量校正；
 - **更新提示**：启动后经当前代理检查 GitHub Release，发现新版本时右下角提示下载；设置页可手动检查；
@@ -63,9 +65,11 @@ npm run desktop:dist       # NSIS 安装包 + 便携版
 
 当前构建产物（`release/`）：
 
-- `VRchat时间轴纪念相册-1.0.2-x64.exe`：NSIS 安装包（未签名）
-- `VRchat-Timeline-Album-1.0.2-portable.exe`：便携版
-- `win-unpacked/`：免安装目录
+- `VRchat-Timeline-Album-Mobile-1.1.0.apk`：Android 手机客户端（约 2.8MB，debug key 签名，可侧载）
+- `VRchat-Timeline-Album-1.1.0-portable.exe`：本轮 **1.1.0 手机测试版便携包**（约 99MB，未签名）
+- `VRchat时间轴纪念相册-1.1.0-x64.exe`：本轮 1.1.0 NSIS 本地测试包（未签名）
+- `win-unpacked/`：免安装目录，可 `npm run desktop:pack` 重新生成
+- `VRchat时间轴纪念相册-1.0.2-x64.exe` / `VRchat-Timeline-Album-1.0.2-portable.exe`：线上 Release `v1.0.2`
 
 存储库结构、EasyTier/P2P、AI 协议、密钥存储与安全说明见 [desktop/README.md](desktop/README.md)。
 
@@ -197,6 +201,17 @@ npm run desktop:dist       # NSIS 安装包 + 便携版
 - 发送端：填写好友虚拟 `IP:端口` 与分享码，测试连接后选择照片，原图流式发送。
 - 接收端收到后自动复制到 `<存储库>/_inbox/transfer/<日期>/`，识别日期/World ID 并加入相册；按内容哈希去重。
 - 分享码使用系统加密保存；请求使用 Bearer 令牌与速率限制，单张 4GB 安全上限。
+
+### 手机客户端（局域网）
+- 管理台 →「手机同步」→ 开启；桌面会在局域网监听 HTTP（默认 7880），并显示二维码。手机与电脑连同一个 Wi-Fi，用相机扫码即可打开手机版 `/m`，无需安装 App。
+- **Android APK**：如果希望像 App 一样安装，使用 [mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.0.apk](mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.0.apk)。APK 有原生连接页（扫码/手动地址/剪贴板），配对后加载同一套手机版，并通过原生桥把原图保存到手机「下载/Hoshikuzu」；电脑端仍必须开启手机同步。详见 [mobile-android/README.md](mobile-android/README.md)。
+- 二维码包含临时配对令牌；扫码后手机获得 HttpOnly 配对 Cookie（12 小时），刷新二维码会立即作废旧链接。
+- 手机端按年月浏览桌面存储库，支持搜索、年份/世界筛选、全屏查看与左右滑动；缩略图实时读取，点开原图也由电脑临时提供，**不写入手机存储**。
+- **投送**：电脑相册卡片长按 380ms 后向上滑 56px 松手，出现全屏投送层；也可点卡片手机按钮或照片详情「投送到手机」。手机需保持页面打开（SSE 在线）。
+- **两种接收方式**（电脑/手机任一端切换，双向同步）：
+  - **实时查看**：电脑当临时服务器，原图 `no-store` 实时读取，不占用手机空间。
+  - **保存到手机**：手机端立即开始下载原图（文件名沿用库内文件），并在浮层保留「保存到手机」按钮；iOS 保存到「文件」，Android 保存到浏览器下载目录。
+- 手机端长按照片向上滑也可以把当前照片保存到手机。桌面服务不经过互联网，关闭同步或退出客户端即断开。
 
 ### AI 图像总结
 - 协议：**OpenAI 兼容**（OpenAI / LM Studio / vLLM / OneAPI）、**Anthropic Claude**、**Google Gemini**、**Ollama 本地**。
@@ -335,10 +350,13 @@ public/textures/         颗粒纹理
 tools/generate_art.py    Pillow 插画生成脚本
 tools/mock-world-api.mjs 本地模拟世界查询代理
 desktop/                 Electron 主进程、preload、存储引擎
-  services/              ai / transfer / easytier
+  services/              ai / transfer / easytier / mobile-sync
   ipc/advanced.cjs       高级设置 IPC
+  ipc/mobile.cjs         手机同步 IPC
   library/               扫描、识别、预览、仓库、导入、备份
+src/mobile/              手机客户端（/m 独立懒加载 chunk）
 src/admin/advanced/      高级设置页面（EasyTier / 传图 / AI）
+src/admin/MobilePage.tsx 手机同步设置页（二维码 / 设备 / 投送方式）
 ```
 
 ### 架构要点
@@ -376,7 +394,7 @@ npm run build
 
 - `npm run build` 通过（TypeScript + Vite）。
 - Chrome / Playwright 验证了：公开时间轴、搜索筛选、本地图片上传、图片直链收录、手动世界、世界识别、本地资料库查询、实时代理查询、v1→v2 迁移、管理台认证、照片编辑、批量操作、照片置顶 / 取消置顶 / 删除置顶照片、世界资料编辑传播、站点设置、7 套主题（含晨光 / 晴日亮色主题）、4 种布局、完整备份导出 / 合并 / 替换导入、口令修改、锁定与重新登录。
-- 客户端：`npm run test:desktop` 28 项通过（扫描/识别/缩略图/云同步/备份 + AI 四协议 mock + AI 识图 World ID 解析 + P2P 上传/去重/鉴权 + EasyTier 参数/状态解析）；`desktop:smoke`、`desktop:smoke:onboarding`、`desktop:smoke:thumbnails` 验证标题栏、新品牌、存储库、两步首启、缩略图 A/B、网格无原图、详情原图加载、三档加载、云同步页与密钥、外观面板与背景特效（黑洞/雨幕/亚克力/极光）、高级设置、AI/P2P 面板、safeStorage 加密；打包后的 `win-unpacked` 与便携版均实际启动（本轮重新打包后按交接要求未重复启动）。
+- 客户端：`npm run test:desktop` **47 项通过**（扫描/识别/缩略图/云同步/备份 + AI 四协议 mock + AI 识图 World ID 解析 + P2P 上传/去重/鉴权 + EasyTier 参数/状态解析 + 手机同步配对/媒体/SSE 投送）；`desktop:smoke`、`desktop:smoke:onboarding`、`desktop:smoke:thumbnails` 验证标题栏、新品牌、存储库、两步首启、缩略图 A/B、网格无原图、详情原图加载、三档加载、云同步页与密钥、外观面板与背景特效（黑洞/雨幕/亚克力/极光）、高级设置、AI/P2P 面板、**手机同步二维码、390×844 手机页面、SSE 在线、投送浮层、双端模式同步、桌面长按上滑投送层**、safeStorage 加密；打包后的 `win-unpacked` 实际启动。
 - 动态背景：`07-blackhole.png`、`07a-blackhole-scene.png`、`08-rain.png`、`10-acrylic.png`、`11-aurora.png` 截图检查了黑洞圆形视界/光子环/吸积盘、雨滴玻璃、亚克力磨砂层与极光帘幕；冒烟测试同时验证「实验性背景」开关关闭时黑洞卡片隐藏、开启后出现。
 - 1440×1000 与 390×844 两种尺寸的视觉与交互检查；亮色主题下检查了首页、时间轴、三种布局、空状态、详情、上传、页脚与管理台桌面 / 移动端；移动端无横向溢出。
 
@@ -385,6 +403,7 @@ npm run build
 - 网页：相册数据存 localStorage，容量约 5MB；客户端使用独立存储库，不受此限制。
 - EasyTier 组件需下载或手动选择；TUN 模式需要管理员权限，免 TUN 不能主动发起连接；公共中继可用性不保证。
 - P2P 传图只在双方都运行客户端、加入同一 EasyTier 网络且接收端开启时可用；分享码只应发给信任的好友。
+- 手机客户端只在同一局域网、桌面客户端开启「手机同步」且防火墙放行端口时可用；使用 HTTP（非 HTTPS），部分浏览器的系统分享/剪贴板能力不可用，保存走下载。iOS 切后台会暂停页面导致 SSE 断开，回到前台自动重连；投送方式是全局设置。二维码链接本身即配对凭证，请勿公开分享。
 - AI 仅使用视觉模型；模型的视觉能力由名称/能力字段启发式判断，可能不准确，需要手动确认。生成会调用第三方 API 并产生费用。
 - AI 识图 World ID 依赖照片上印字的清晰度；反光、裁切、模糊会导致失败或误识别，关联后请复核。批量识别会逐张调用视觉模型，耗时与费用随照片数量增加。
 - 银河黑洞是实验性背景，默认隐藏；需在管理台开启「实验性背景」后才可使用。它依赖 WebGL，低端 GPU 上可能占用较高；关闭开关会自动回退到星轨。

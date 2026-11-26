@@ -49,6 +49,7 @@
   border-right: 1px solid var(--line);
   background: var(--admin-sidebar-bg);
   backdrop-filter: blur(26px) saturate(1.1);
+  overflow-y: auto;
 }
 
 .admin-sidebar__brand {

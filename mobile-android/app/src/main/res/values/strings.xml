@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">时光轴相册</string>
+    <string name="brand_kicker">VRCHAT MEMORY TIMELINE</string>
+    <string name="setup_title">时光轴相册</string>
+    <string name="setup_subtitle">手机客户端 · 局域网直连电脑</string>
+    <string name="setup_desc">电脑打开「手机同步」后，扫描二维码即可开始。照片由电脑实时提供，不经过互联网。</string>
+    <string name="scan_qr">扫描电脑上的二维码</string>
+    <string name="manual_label">或手动输入电脑地址</string>
+    <string name="url_hint">http://192.168.1.23:7880/m</string>
+    <string name="connect">连接电脑</string>
+    <string name="paste">从剪贴板粘贴</string>
+    <string name="steps_title">连接步骤</string>
+    <string name="step_1">电脑端打开 管理台 → 手机同步，并保持开启</string>
+    <string name="step_2">手机与电脑连接同一个 Wi-Fi</string>
+    <string name="step_3">扫描二维码，或输入电脑上显示的链接</string>
+    <string name="footnote">只在局域网内连接 · 不占用手机空间 · 连接后按返回键可刷新或切换电脑</string>
+    <string name="status_ready">等待扫描二维码</string>
+    <string name="loading_connect">正在连接电脑…</string>
+    <string name="loading_page">正在加载时光轴…</string>
+    <string name="save_started">正在保存到手机…</string>
+    <string name="scan_prompt">扫描电脑上的手机同步二维码</string>
+    <string name="session_title">时光轴手机版</string>
+    <string name="session_reload">刷新页面</string>
+    <string name="session_switch">切换电脑 / 重新扫码</string>
+    <string name="session_exit">退出应用</string>
+</resources>

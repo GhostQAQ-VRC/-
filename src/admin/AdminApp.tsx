@@ -15,6 +15,7 @@ import { SettingsPage } from './SettingsPage';
 import { AdvancedSettingsPage } from './advanced/AdvancedSettingsPage';
 import { ActivityPage } from './ActivityPage';
 import { SyncPage } from './SyncPage';
+import { MobilePage } from './MobilePage';
 
 interface AdminAppProps {
   album: AlbumApi;
@@ -28,6 +29,7 @@ const PAGE_META: Record<string, { title: string; kicker: string }> = {
   '/admin/worlds': { title: '世界资料库', kicker: 'WORLDS' },
   '/admin/settings': { title: '站点设置', kicker: 'SETTINGS' },
   '/admin/sync': { title: '云同步', kicker: 'CLOUD SYNC' },
+  '/admin/mobile': { title: '手机同步', kicker: 'MOBILE LINK' },
   '/admin/advanced': { title: '高级设置', kicker: 'ADVANCED' },
   '/admin/activity': { title: '操作记录', kicker: 'ACTIVITY' },
 };
@@ -82,6 +84,8 @@ export function AdminApp({ album, route, navigate }: AdminAppProps) {
     page = <SettingsPage album={album} auth={auth} />;
   } else if (route === '/admin/sync') {
     page = <SyncPage album={album} />;
+  } else if (route === '/admin/mobile') {
+    page = <MobilePage album={album} />;
   } else if (route === '/admin/advanced') {
     page = <AdvancedSettingsPage album={album} />;
   } else if (route === '/admin/activity') {

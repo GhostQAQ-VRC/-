@@ -33,6 +33,13 @@ const DEFAULTS = {
     },
     lastTarget: '',
   },
+  // LAN mobile client: serves the phone UI and live album over Wi-Fi.
+  mobile: {
+    enabled: false,
+    port: 7880,
+    preferredIp: '',
+    receiveMode: 'stream',
+  },
   easytier: {
     corePath: '',
     cliPath: '',

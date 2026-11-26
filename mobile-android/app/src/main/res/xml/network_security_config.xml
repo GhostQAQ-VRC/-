@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- The phone client intentionally talks to the desktop over plain HTTP on
+         the local Wi-Fi network. Only cleartext is allowed; the pairing token
+         and HttpOnly cookie gate every API request. -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

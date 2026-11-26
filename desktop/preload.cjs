@@ -31,7 +31,7 @@ function encodePath(relativePath) {
 
 contextBridge.exposeInMainWorld('hoshikuzu', {
   desktop: {
-    version: '1.0.0',
+    version: '1.1.0',
     platform: process.platform,
     library: {
       getConfig: () => invoke('library:get-config'),
@@ -175,6 +175,19 @@ contextBridge.exposeInMainWorld('hoshikuzu', {
       regenerateToken: () => invoke('transfer:regenerate-token'),
       onIncoming: (callback) => subscribe('transfer:incoming', callback),
       onProgress: (callback) => subscribe('transfer:progress', callback),
+    },
+    mobile: {
+      getConfig: () => invoke('mobile:get-config'),
+      setConfig: (patch) => invoke('mobile:set-config', patch),
+      start: () => invoke('mobile:start'),
+      stop: () => invoke('mobile:stop'),
+      status: () => invoke('mobile:status'),
+      qr: (payload) => invoke('mobile:qr', payload),
+      rotate: () => invoke('mobile:rotate'),
+      cast: (payload) => invoke('mobile:cast', payload),
+      disconnect: (payload) => invoke('mobile:disconnect', payload),
+      onStatus: (callback) => subscribe('mobile:status', callback),
+      onCast: (callback) => subscribe('mobile:cast', callback),
     },
   },
 });

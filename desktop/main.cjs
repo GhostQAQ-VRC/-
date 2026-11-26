@@ -28,6 +28,7 @@ const { createAdvancedServices } = require('./ipc/advanced.cjs');
 const { createSyncService } = require('./services/sync.cjs');
 const { createNetworkService } = require('./ipc/network.cjs');
 const { createUpdateService } = require('./ipc/update.cjs');
+const { createMobileService } = require('./ipc/mobile.cjs');
 
 const isSmoke = process.env.HOSHIKUZU_SMOKE === '1';
 const smokeNoLibrary = process.env.HOSHIKUZU_SMOKE_NO_LIBRARY === '1';
@@ -71,6 +72,7 @@ let advancedServices = null;
 let syncService = null;
 let networkService = null;
 let updateService = null;
+let mobileService = null;
 let sampleTempDir = null;
 let previewReadyBuffer = [];
 let previewReadyTimer = null;
@@ -178,6 +180,20 @@ async function refreshPreviewQueue(root) {
     },
     onError: (payload) => broadcast('library:preview-error', payload),
   });
+}
+
+async function previewDirFor(root) {
+  if (!root) return null;
+  if (currentPreviewDir) return currentPreviewDir;
+  const wrapper = await repository.readLibrary(root);
+  currentPreviewDir = repository.previewDir(root, wrapper);
+  return currentPreviewDir;
+}
+
+async function albumForMobile(root) {
+  if (pendingAlbumJson) return pendingAlbumJson;
+  const wrapper = await repository.readLibrary(root);
+  return wrapper ? wrapper.album : null;
 }
 
 async function currentConfig() {
@@ -603,6 +619,7 @@ async function flushSave(root) {
   }
   try {
     await repository.updateAlbum(root, album);
+    if (mobileService) void mobileService.notifyAlbumChanged();
   } catch (error) {
     broadcast('album:save-error', {
       message: `写入存储库失败：${error && error.message ? error.message : '未知错误'}`,
@@ -2227,6 +2244,242 @@ async function runSmokeTest(win) {
   if (syncApiCheck.providers < 5) throw new Error('sync providers missing');
   if (!syncApiCheck.passwordSaved) throw new Error('sync secret was not stored');
 
+  // ---- LAN mobile client: QR pairing, phone UI and live cast ----
+  await win.webContents.executeJavaScript("window.location.hash = '#/admin/mobile'");
+  await delay(1400);
+  const mobileEnable = await win.webContents
+    .executeJavaScript(`(async () => {
+      const api = window.hoshikuzu.desktop;
+      const port = 18000 + Math.floor(Math.random() * 2000);
+      const result = await api.mobile.setConfig({ enabled: true, port, receiveMode: 'stream' });
+      if (result.config?.status?.running) {
+        window.__smokeMobilePort = result.config.status.port;
+      }
+      return {
+        ok: result.ok,
+        error: result.error,
+        running: Boolean(result.config?.status?.running),
+        port: result.config?.status?.port,
+        receiveMode: result.config?.status?.receiveMode,
+        page: Boolean(document.querySelector('.mobile-sync-page')),
+        modeCards: document.querySelectorAll('.mobile-mode-card').length,
+      };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] mobile enable', mobileEnable);
+  if (!mobileEnable.running) throw new Error(`mobile sync did not start: ${mobileEnable.error || ''}`);
+  if (mobileEnable.modeCards !== 2) throw new Error('mobile delivery mode cards missing');
+  const qrCheck = await win.webContents
+    .executeJavaScript(`(async () => {
+      const api = window.hoshikuzu.desktop;
+      const qr = await api.mobile.qr({});
+      return {
+        ok: qr.ok,
+        hasImage: Boolean(qr.dataUrl && qr.dataUrl.startsWith('data:image/png')),
+        url: qr.url || '',
+      };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] mobile qr', { ...qrCheck, url: qrCheck.url ? 'ok' : 'missing' });
+  if (!qrCheck.ok || !qrCheck.hasImage) throw new Error('mobile QR code was not generated');
+  await win.webContents.executeJavaScript('window.scrollTo(0, 0)');
+  await delay(700);
+  await shot('03g-mobile-sync.png');
+
+  if (!mobileService || !mobileService.service.token) {
+    throw new Error('mobile service is not available to the smoke test');
+  }
+  const mobileUrl = `http://127.0.0.1:${mobileService.service.port}/m/${mobileService.service.token}`;
+  const mobileWin = new BrowserWindow({
+    width: 390,
+    height: 844,
+    show: true,
+    backgroundColor: '#05040c',
+    title: '手机客户端冒烟',
+    autoHideMenuBar: true,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  const mobileShot = async (name) => {
+    await delay(500);
+    const image = await mobileWin.webContents.capturePage();
+    await fsp.writeFile(path.join(outDir, name), image.toPNG());
+    console.log(`[desktop:smoke] wrote ${name}`);
+  };
+  try {
+    await mobileWin.loadURL(mobileUrl);
+    await delay(2600);
+    const mobileUi = await mobileWin.webContents
+      .executeJavaScript(`(() => ({
+        app: Boolean(document.querySelector('.m-app')),
+        hero: Boolean(document.querySelector('.m-hero')),
+        cards: document.querySelectorAll('.m-card').length,
+        months: document.querySelectorAll('.m-month').length,
+        title: document.querySelector('.m-brand strong')?.textContent || '',
+        connect: document.querySelector('.m-conn')?.textContent || '',
+        mode: document.querySelector('.m-conn small')?.textContent || '',
+      }))()`)
+      .catch((error) => ({ error: error.message }));
+    console.log('[desktop:smoke] mobile ui', mobileUi);
+    if (!mobileUi.app) throw new Error(`mobile client did not render: ${mobileUi.error || ''}`);
+    if (!mobileUi.hero || mobileUi.cards < 1) throw new Error('mobile timeline is empty');
+    if (!mobileUi.connect.includes('电脑在线')) throw new Error('mobile SSE did not connect');
+    await mobileShot('03h-mobile-client.png');
+
+    const album = await albumForMobile(currentLibraryRoot);
+    const firstPhoto = album?.photos?.find((photo) => !photo.missing && photo.libraryPath);
+    if (!firstPhoto) throw new Error('smoke library has no castable photo');
+    const castResult = await mobileService.service.cast(firstPhoto.id);
+    console.log('[desktop:smoke] mobile cast', {
+      ok: castResult.ok,
+      delivered: castResult.delivered,
+    });
+    if (!castResult.ok || castResult.delivered < 1) throw new Error('mobile cast was not delivered');
+    await delay(1000);
+    const incoming = await mobileWin.webContents
+      .executeJavaScript(`(() => {
+        const overlay = document.querySelector('.m-incoming');
+        const frame = overlay?.querySelector('.m-incoming__frame');
+        const img = overlay?.querySelector('img');
+        const frameRect = frame?.getBoundingClientRect();
+        const imgRect = img?.getBoundingClientRect();
+        return {
+          visible: Boolean(overlay),
+          text: overlay?.textContent || '',
+          image: Boolean(img),
+          complete: Boolean(img?.complete),
+          naturalWidth: img?.naturalWidth || 0,
+          frame: frameRect
+            ? { width: Math.round(frameRect.width), height: Math.round(frameRect.height) }
+            : null,
+          imgBox: imgRect
+            ? { width: Math.round(imgRect.width), height: Math.round(imgRect.height) }
+            : null,
+          opacity: frame ? getComputedStyle(frame).opacity : null,
+          transform: img ? getComputedStyle(img).transform : null,
+        };
+      })()`)
+      .catch((error) => ({ error: error.message }));
+    console.log('[desktop:smoke] mobile incoming', incoming);
+    if (!incoming.visible || !incoming.image) throw new Error('incoming cast overlay missing');
+    if (!incoming.complete || incoming.naturalWidth < 1) {
+      throw new Error('incoming cast image did not decode');
+    }
+    if (!incoming.frame || incoming.frame.width < 120 || incoming.frame.height < 120) {
+      throw new Error('incoming cast frame collapsed');
+    }
+    if (!(Number(incoming.opacity) > 0.5)) {
+      throw new Error('incoming cast image stayed hidden');
+    }
+    if (!incoming.text.includes('来自电脑的投送')) throw new Error('incoming cast copy missing');
+    await mobileShot('03i-mobile-incoming.png');
+
+    await mobileWin.webContents.executeJavaScript(
+      "document.querySelector('.m-incoming .m-icon-btn')?.click()",
+    );
+    await delay(400);
+    const saveMode = await win.webContents.executeJavaScript(
+      "window.hoshikuzu.desktop.mobile.setConfig({ receiveMode: 'save' })",
+    );
+    if (saveMode.config?.status?.receiveMode !== 'save') {
+      throw new Error('mobile save mode was not applied');
+    }
+    await delay(500);
+    const phoneMode = await mobileWin.webContents.executeJavaScript(
+      "document.querySelector('.m-conn small')?.textContent || ''",
+    );
+    console.log('[desktop:smoke] mobile mode after desktop switch', phoneMode);
+    if (!phoneMode.includes('保存')) {
+      throw new Error('phone did not receive the mode change over SSE');
+    }
+
+    // Desktop long-press + drag-up gesture. Real pointer capture is not
+    // available for synthetic events, so the handler's best-effort capture is
+    // expected to fail silently; the pointer events themselves are enough.
+    await win.webContents.executeJavaScript("window.location.hash = '#/'");
+    await delay(1800);
+    const gestureArmed = await win.webContents
+      .executeJavaScript(`(async () => {
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const card = document.querySelector('.photo-card');
+        if (!card) return { error: 'photo card missing' };
+        card.scrollIntoView({ block: 'center' });
+        await wait(350);
+        const rect = card.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const base = {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 77,
+          pointerType: 'mouse',
+          isPrimary: true,
+          button: 0,
+          buttons: 1,
+          clientX: x,
+          clientY: y,
+        };
+        window.__smokeCast = { x, y, pointerId: 77 };
+        card.dispatchEvent(new PointerEvent('pointerdown', base));
+        await wait(500);
+        card.dispatchEvent(
+          new PointerEvent('pointermove', { ...base, clientY: y - 96 }),
+        );
+        await wait(220);
+        const layer = document.querySelector('.cast-layer');
+        return {
+          layer: Boolean(layer),
+          ready: layer?.classList.contains('is-ready') || false,
+          headline: document.querySelector('.cast-layer__headline')?.textContent?.trim() || '',
+        };
+      })()`)
+      .catch((error) => ({ error: error.message }));
+    console.log('[desktop:smoke] mobile cast gesture', gestureArmed);
+    if (!gestureArmed.layer) throw new Error('cast gesture overlay did not appear');
+    await shot('03j-mobile-cast.png');
+
+    const gestureDone = await win.webContents
+      .executeJavaScript(`(async () => {
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const card = document.querySelector('.photo-card');
+        const point = window.__smokeCast || { x: 100, y: 300, pointerId: 77 };
+        card?.dispatchEvent(
+          new PointerEvent('pointerup', {
+            bubbles: true,
+            cancelable: true,
+            pointerId: point.pointerId,
+            pointerType: 'mouse',
+            isPrimary: true,
+            button: 0,
+            buttons: 0,
+            clientX: point.x,
+            clientY: point.y - 96,
+          }),
+        );
+        await wait(900);
+        return {
+          layerGone: !document.querySelector('.cast-layer'),
+          toast: document.querySelector('.toast__title')?.textContent || '',
+        };
+      })()`)
+      .catch((error) => ({ error: error.message }));
+    console.log('[desktop:smoke] mobile cast released', gestureDone);
+    if (!gestureDone.layerGone) throw new Error('cast overlay did not close after release');
+    if (!gestureDone.toast.includes('已投送到手机')) {
+      throw new Error('cast toast was not shown');
+    }
+
+    await win.webContents.executeJavaScript(
+      "window.hoshikuzu.desktop.mobile.setConfig({ receiveMode: 'stream', enabled: false })",
+    );
+    await delay(400);
+  } finally {
+    if (!mobileWin.isDestroyed()) mobileWin.destroy();
+  }
+
   await win.webContents.executeJavaScript("window.location.hash = '#/admin/settings'");
   await delay(1200);
 
@@ -2317,9 +2570,18 @@ async function bootstrap() {
   updateService.register();
   updateService.startAuto();
 
+  mobileService = createMobileService({
+    broadcast,
+    getRoot: getAvailableRoot,
+    getAlbum: albumForMobile,
+    getPreviewDir: previewDirFor,
+  });
+  mobileService.register();
+
   registerIpc();
   await createWindow();
   await advancedServices.startAuto();
+  await mobileService.startAuto();
 }
 
 const gotLock = isSmoke || app.requestSingleInstanceLock();
@@ -2359,6 +2621,7 @@ if (!gotLock) {
     flushSaveSync();
     clearSampleCache();
     if (syncService) syncService.dispose();
+    if (mobileService) void mobileService.dispose();
     if (advancedServices) {
       void advancedServices.stopAll();
     }

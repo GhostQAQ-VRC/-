@@ -1,0 +1,266 @@
+/* ---------------------------------------------------------------- *
+ * Drag-up-to-cast gesture (desktop -> phone)
+ * ---------------------------------------------------------------- */
+
+.photo-card__cast-cue {
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(8, 6, 16, 0.55);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 249, 240, 0.8);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.3s ease,
+    transform 0.35s var(--ease-out);
+  pointer-events: none;
+}
+
+.photo-card__media img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.photo-card:hover .photo-card__cast-cue,
+.photo-card:focus-within .photo-card__cast-cue,
+.photo-card.is-casting .photo-card__cast-cue {
+  opacity: 1;
+  transform: none;
+}
+
+.photo-card.is-casting {
+  z-index: 6;
+}
+
+.photo-card__action--cast {
+  color: var(--aqua);
+  border-color: rgba(155, 231, 223, 0.28);
+}
+
+.photo-card__action--cast:hover {
+  background: rgba(155, 231, 223, 0.18);
+  border-color: rgba(155, 231, 223, 0.5);
+  color: #eafffc;
+}
+
+@media (hover: none) {
+  /* Touch users cannot discover the gesture through hover, so keep a quiet
+     hint visible. */
+  .photo-card__cast-cue {
+    opacity: 0.72;
+    transform: none;
+  }
+}
+
+.cast-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: max(34px, env(safe-area-inset-bottom));
+  animation: cast-layer-in 0.18s ease-out both;
+}
+
+@keyframes cast-layer-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.cast-layer__veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(58% 40% at 50% 100%, rgba(155, 231, 223, 0.12), transparent 70%),
+    radial-gradient(52% 38% at 50% 12%, rgba(192, 169, 255, 0.12), transparent 72%),
+    rgba(4, 3, 10, 0.62);
+  backdrop-filter: blur(7px) saturate(0.9);
+}
+
+.cast-layer__headline {
+  position: absolute;
+  top: max(34px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(10, 8, 20, 0.72);
+  backdrop-filter: blur(14px);
+  color: var(--cream);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+}
+
+.cast-layer.is-ready .cast-layer__headline {
+  border-color: rgba(155, 231, 223, 0.5);
+  color: #eafffc;
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.45),
+    0 0 24px rgba(155, 231, 223, 0.25);
+}
+
+.cast-layer__thumb {
+  position: absolute;
+  left: 50%;
+  bottom: calc(150px + max(34px, env(safe-area-inset-bottom)));
+  width: clamp(132px, 24vw, 196px);
+  aspect-ratio: 3 / 4;
+  border-radius: 18px;
+  overflow: hidden;
+  transform: translate(-50%, calc(var(--cast-lift, 0px) * -1)) rotate(-2.2deg)
+    scale(calc(0.92 + var(--cast-progress, 0) * 0.08));
+  opacity: calc(0.55 + var(--cast-progress, 0) * 0.45);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.16) inset,
+    0 0 40px rgba(155, 231, 223, 0.18);
+  transition:
+    transform 0.08s linear,
+    opacity 0.12s linear,
+    filter 0.2s ease;
+  filter: saturate(0.9);
+}
+
+.cast-layer.is-ready .cast-layer__thumb {
+  filter: saturate(1.05) brightness(1.04);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(155, 231, 223, 0.5) inset,
+    0 0 54px rgba(155, 231, 223, 0.35);
+}
+
+.cast-layer__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.cast-layer__dock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: min(280px, 78vw);
+  padding: 16px 26px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(155, 231, 223, 0.12), transparent 62%),
+    rgba(13, 10, 24, 0.86);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s var(--ease-out);
+}
+
+.cast-layer.is-ready .cast-layer__dock {
+  border-color: rgba(155, 231, 223, 0.55);
+  box-shadow:
+    0 26px 60px rgba(0, 0, 0, 0.55),
+    0 0 32px rgba(155, 231, 223, 0.25);
+  transform: translateY(-3px);
+}
+
+.cast-layer__dock-ring {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 5px;
+  border: 1px solid rgba(155, 231, 223, 0.35);
+  border-radius: 50%;
+  background: rgba(155, 231, 223, 0.1);
+  color: var(--aqua);
+  box-shadow: 0 0 0 0 rgba(155, 231, 223, 0.25);
+  animation: cast-ring 1.6s ease-out infinite;
+}
+
+.cast-layer.is-ready .cast-layer__dock-ring {
+  background: rgba(155, 231, 223, 0.2);
+  animation-duration: 0.9s;
+}
+
+@keyframes cast-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(155, 231, 223, 0.28);
+  }
+  100% {
+    box-shadow: 0 0 0 16px rgba(155, 231, 223, 0);
+  }
+}
+
+.cast-layer__dock strong {
+  color: var(--cream);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.cast-layer__dock small {
+  color: var(--faint);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cast-layer,
+  .cast-layer__thumb,
+  .cast-layer__dock,
+  .cast-layer__dock-ring {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Detail dialog cast action */
+.detail-cast {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding: 7px 11px;
+  border: 1px solid rgba(155, 231, 223, 0.28);
+  border-radius: 999px;
+  background: rgba(155, 231, 223, 0.08);
+  color: var(--aqua);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.detail-cast:hover {
+  background: rgba(155, 231, 223, 0.16);
+  border-color: rgba(155, 231, 223, 0.5);
+}

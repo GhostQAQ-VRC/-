@@ -589,6 +589,67 @@ export interface TransferSendResult {
   error?: string;
 }
 
+export type MobileReceiveMode = 'stream' | 'save';
+
+export interface MobileLanAddress {
+  address: string;
+  iface: string;
+  score: number;
+}
+
+export interface MobileDeviceView {
+  id: string;
+  name: string;
+  platform: string;
+  ip: string;
+  connectedAt: string;
+  lastSeen: string;
+}
+
+export interface MobileCastRecord {
+  id: string;
+  at: string;
+  photoId: string;
+  note: string;
+  mode: MobileReceiveMode;
+  delivered: number;
+}
+
+export interface MobileStatusView {
+  running: boolean;
+  port: number;
+  startedAt: string | null;
+  deviceCount: number;
+  devices: MobileDeviceView[];
+  receiveMode: MobileReceiveMode;
+  preferredIp: string;
+  activeIp: string;
+  lanIps: MobileLanAddress[];
+  lastCast: MobileCastRecord | null;
+  lastError: string | null;
+  hasLibrary: boolean;
+  libraryName: string | null;
+  url: string | null;
+}
+
+export interface MobileConfigView {
+  enabled: boolean;
+  port: number;
+  preferredIp: string;
+  receiveMode: MobileReceiveMode;
+  status: MobileStatusView;
+}
+
+export interface MobileActionResult {
+  ok: boolean;
+  error?: string;
+  delivered?: number;
+  config?: MobileConfigView;
+  dataUrl?: string;
+  url?: string;
+  ip?: string;
+}
+
 export interface DesktopBridge {
   version: string;
   platform: string;
@@ -887,6 +948,28 @@ export interface DesktopBridge {
     regenerateToken: () => Promise<TransferConfigView>;
     onIncoming: (callback: (draft: DesktopImportDraft) => void) => () => void;
     onProgress: (callback: (progress: TransferProgress) => void) => () => void;
+  };
+  mobile: {
+    getConfig: () => Promise<MobileConfigView>;
+    setConfig: (patch: {
+      enabled?: boolean;
+      port?: number;
+      preferredIp?: string;
+      receiveMode?: MobileReceiveMode;
+    }) => Promise<MobileActionResult & { config: MobileConfigView }>;
+    start: () => Promise<MobileActionResult & { config: MobileConfigView }>;
+    stop: () => Promise<MobileActionResult & { config: MobileConfigView }>;
+    status: () => Promise<MobileConfigView>;
+    qr: (payload?: { ip?: string }) => Promise<MobileActionResult>;
+    rotate: () => Promise<MobileActionResult & { config: MobileConfigView }>;
+    cast: (payload: {
+      id?: string;
+      ids?: string[];
+      mode?: MobileReceiveMode;
+    }) => Promise<MobileActionResult & { config?: MobileConfigView }>;
+    disconnect: (payload: { id: string }) => Promise<MobileActionResult & { config: MobileConfigView }>;
+    onStatus: (callback: (status: MobileStatusView) => void) => () => void;
+    onCast: (callback: (result: MobileActionResult) => void) => () => void;
   };
 }
 

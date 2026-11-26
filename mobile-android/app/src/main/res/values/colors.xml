@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_deep">#05040C</color>
+    <color name="bg_panel">#0E0A19</color>
+    <color name="ink">#FBF4E9</color>
+    <color name="muted">#B7ADCA</color>
+    <color name="faint">#8B81A3</color>
+    <color name="sakura">#F3AECB</color>
+    <color name="lilac">#C0A9FF</color>
+    <color name="aqua">#9BE7DF</color>
+    <color name="line">#26FFFFFF</color>
+    <color name="danger">#FFA2AD</color>
+    <color name="button_ink">#241428</color>
+    <color name="status_bar">#070510</color>
+</resources>

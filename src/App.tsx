@@ -5,6 +5,7 @@ import { APPEARANCE_CACHE_KEY, themeChromeColor, themeTone } from './data/appear
 import { ToastProvider, useToast } from './hooks/useToast';
 import { DesktopLibraryProvider, useDesktopLibrary } from './hooks/useDesktopLibrary';
 import { DesktopServicesProvider } from './hooks/useDesktopServices';
+import { MobileCastProvider } from './hooks/useMobileCast';
 import { ThumbnailLoadingProvider } from './hooks/useThumbnailLoader';
 import { getDesktopBridge, isDesktopRuntime } from './platform';
 import { importPhotosFromDesktop } from './platform/importPhotos';
@@ -13,12 +14,44 @@ import { UpdateNotice } from './components/UpdateNotice';
 import { LibraryGate } from './components/LibraryGate';
 import { BrandGlyph } from './components/BrandGlyph';
 import { PublicSite } from './PublicSite';
+import { isMobileClientEntry } from './mobile/entry';
 
 // The admin console (and its AI/EasyTier panels) is only downloaded when the
 // admin route is opened, keeping the public timeline's first paint small.
 const AdminApp = lazy(() =>
   import('./admin/AdminApp').then((module) => ({ default: module.AdminApp })),
 );
+
+// The phone client is a separate chunk: the public site and the desktop window
+// never download its timeline, viewer or gesture code.
+const MobileClient = lazy(() =>
+  import('./mobile/MobileApp').then((module) => ({ default: module.MobileApp })),
+);
+
+function MobileClientLoading() {
+  return (
+    <div
+      style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        background: '#05040c',
+        color: '#b7adca',
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: 12,
+        letterSpacing: '0.08em',
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      <BrandGlyph size={46} />
+      <span>正在打开手机客户端…</span>
+    </div>
+  );
+}
 
 function AdminRouteLoading() {
   return (
@@ -182,14 +215,23 @@ function Root() {
   return (
     <DesktopLibraryProvider album={album}>
       <DesktopServicesProvider album={album}>
-        <Shell album={album} path={path} navigate={navigate} />
-        <UpdateNotice />
+        <MobileCastProvider>
+          <Shell album={album} path={path} navigate={navigate} />
+          <UpdateNotice />
+        </MobileCastProvider>
       </DesktopServicesProvider>
     </DesktopLibraryProvider>
   );
 }
 
 export default function App() {
+  if (isMobileClientEntry()) {
+    return (
+      <Suspense fallback={<MobileClientLoading />}>
+        <MobileClient />
+      </Suspense>
+    );
+  }
   return (
     <ToastProvider>
       <Root />

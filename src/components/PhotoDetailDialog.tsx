@@ -10,12 +10,14 @@ import {
   RotateCcw,
   RotateCw,
   ScanText,
+  Smartphone,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import type { Photo, WorldLibraryEntry } from '../types';
 import { getDesktopBridge, photoOriginalSrc, photoSrc } from '../platform';
+import { useMobileCast } from '../hooks/useMobileCast';
 import {
   formatDateLong,
   formatDateShort,
@@ -62,6 +64,7 @@ export function PhotoDetailDialog({
 }: PhotoDetailDialogProps) {
   const { pushToast } = useToast();
   const bridge = getDesktopBridge();
+  const mobileCast = useMobileCast();
   const photo = activeId ? (photos.find((item) => item.id === activeId) ?? null) : null;
   const index = photo ? photos.findIndex((item) => item.id === photo.id) : -1;
   const prevPhoto = index > 0 ? photos[index - 1] : null;
@@ -508,6 +511,22 @@ export function PhotoDetailDialog({
               )}
               {isFeatured ? '已置顶 · 取消' : '设为首页置顶'}
             </button>
+            {mobileCast.running ? (
+              <button
+                type="button"
+                className="detail-cast"
+                onClick={() =>
+                  void mobileCast.cast(
+                    photo.id,
+                    photo.note.trim() || formatDateShort(photo.capturedAt),
+                  )
+                }
+                title="把这张照片投送到已连接的手机"
+              >
+                <Smartphone size={13} strokeWidth={1.8} aria-hidden="true" />
+                投送到手机
+              </button>
+            ) : null}
           </header>
 
           <section className="note-editor" aria-labelledby="note-editor-title">

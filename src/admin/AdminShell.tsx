@@ -11,6 +11,7 @@ import {
   Plus,
   Settings2,
   SlidersHorizontal,
+  Smartphone,
   X,
 } from 'lucide-react';
 import { BrandGlyph } from '../components/BrandGlyph';
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { path: '/admin/worlds', label: '世界资料库', en: 'WORLDS', icon: Globe2 },
   { path: '/admin/settings', label: '站点设置', en: 'SETTINGS', icon: Settings2 },
   { path: '/admin/sync', label: '云同步', en: 'CLOUD SYNC', icon: Cloud },
+  { path: '/admin/mobile', label: '手机同步', en: 'MOBILE LINK', icon: Smartphone },
   { path: '/admin/advanced', label: '高级设置', en: 'ADVANCED', icon: SlidersHorizontal },
   { path: '/admin/activity', label: '操作记录', en: 'ACTIVITY', icon: History },
 ];
