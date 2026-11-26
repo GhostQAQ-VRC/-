@@ -8,6 +8,19 @@ export interface HoshikuzuAndroidBridge {
   saveUrl(name: string, url: string): boolean;
   toast?(message: string): void;
   appVersion?(): string;
+  /** Optional desktop sync: open the native QR/manual connection screen. */
+  openConnect?(): void;
+  /** Leave remote desktop mode and return to the standalone local album. */
+  openLocal?(): void;
+  /** Android-only platform services used by the shared frontend bridge. */
+  pickMedia?(callbackId: string, maxEdge: number, quality: number): void;
+  deleteManaged?(contentHash: string): boolean;
+  secureGet?(key: string): string;
+  secureSet?(key: string, value: string): boolean;
+  secureDelete?(key: string): boolean;
+  openExternal?(url: string): void;
+  httpRequest?(callbackId: string, requestJson: string): void;
+  md5Hex?(base64: string): string;
 }
 
 declare global {

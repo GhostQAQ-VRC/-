@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { RefObject } from 'react';
-import { LayoutDashboard, Palette, Plus, Search, Sparkles } from 'lucide-react';
+import { LayoutDashboard, MonitorSmartphone, Palette, Plus, Search, Sparkles } from 'lucide-react';
 import { BrandGlyph } from './BrandGlyph';
 import { StarGlyph } from './StarGlyph';
 
@@ -13,6 +13,8 @@ interface HeaderProps {
   appearanceOpen: boolean;
   appearanceButtonRef: RefObject<HTMLButtonElement | null>;
   worldApiEnabled: boolean;
+  /** Android shell only: open the optional desktop connection screen. */
+  onConnectDesktop?: () => void;
 }
 
 export function Header({
@@ -24,6 +26,7 @@ export function Header({
   appearanceOpen,
   appearanceButtonRef,
   worldApiEnabled,
+  onConnectDesktop,
 }: HeaderProps) {
   const [scrolled, setScrolled] = useState(false);
 
@@ -87,6 +90,17 @@ export function Header({
             <span className="mode-chip__dot" aria-hidden="true" />
             {worldApiEnabled ? '联网查询' : '本地资料库'}
           </span>
+          {onConnectDesktop ? (
+            <button
+              type="button"
+              className="icon-button header-connect"
+              onClick={onConnectDesktop}
+              aria-label="连接电脑（可选）"
+              title="连接电脑（可选）"
+            >
+              <MonitorSmartphone size={17} strokeWidth={1.7} />
+            </button>
+          ) : null}
           <a
             className="icon-button header-admin"
             href="#/admin"

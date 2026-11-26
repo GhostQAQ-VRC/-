@@ -8,6 +8,7 @@ import { DesktopServicesProvider } from './hooks/useDesktopServices';
 import { MobileCastProvider } from './hooks/useMobileCast';
 import { ThumbnailLoadingProvider } from './hooks/useThumbnailLoader';
 import { getDesktopBridge, isDesktopRuntime } from './platform';
+import { isMobileRuntime } from './platform/mobileRuntime';
 import { importPhotosFromDesktop } from './platform/importPhotos';
 import { DesktopTitleBar } from './components/DesktopTitleBar';
 import { UpdateNotice } from './components/UpdateNotice';
@@ -72,6 +73,7 @@ function Shell({
   navigate: (target: string) => void;
 }) {
   const desktop = isDesktopRuntime();
+  const mobile = isMobileRuntime();
   const bridge = getDesktopBridge();
   const { pushToast } = useToast();
   const { chooseLibrary, scan, openFolder, config: libraryConfig } = useDesktopLibrary();
@@ -81,12 +83,17 @@ function Shell({
   const imageLoadingMode = libraryConfig?.imageLoadingMode ?? 'realtime';
 
   useEffect(() => {
-    if (desktop) {
+    if (desktop && !mobile) {
       document.documentElement.dataset.desktop = 'true';
     } else {
       delete document.documentElement.dataset.desktop;
     }
-  }, [desktop]);
+    if (mobile) {
+      document.documentElement.dataset.mobile = 'true';
+    } else {
+      delete document.documentElement.dataset.mobile;
+    }
+  }, [desktop, mobile]);
 
   // Dropping a file outside the upload dropzone must never navigate the window
   // away from the app inside Electron.
@@ -152,8 +159,8 @@ function Shell({
 
   return (
     <>
-      {desktop ? <DesktopTitleBar /> : null}
-      {desktop ? <LibraryGate /> : null}
+      {desktop && !mobile ? <DesktopTitleBar /> : null}
+      {desktop && !mobile ? <LibraryGate /> : null}
       {path.startsWith('/admin') ? (
         <Suspense fallback={<AdminRouteLoading />}>
           <AdminApp album={album} route={path} navigate={navigate} />
@@ -217,7 +224,7 @@ function Root() {
       <DesktopServicesProvider album={album}>
         <MobileCastProvider>
           <Shell album={album} path={path} navigate={navigate} />
-          <UpdateNotice />
+          {isMobileRuntime() ? null : <UpdateNotice />}
         </MobileCastProvider>
       </DesktopServicesProvider>
     </DesktopLibraryProvider>

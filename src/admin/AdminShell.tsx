@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { BrandGlyph } from '../components/BrandGlyph';
+import { isMobileRuntime } from '../platform/mobileRuntime';
 
 interface AdminShellProps {
   siteName: string;
@@ -53,6 +54,10 @@ export function AdminShell({
   children,
 }: AdminShellProps) {
   const [navOpen, setNavOpen] = useState(false);
+  const mobile = isMobileRuntime();
+  const navItems = mobile
+    ? NAV_ITEMS.filter((item) => item.path !== '/admin/mobile')
+    : NAV_ITEMS;
 
   useEffect(() => {
     setNavOpen(false);
@@ -93,7 +98,7 @@ export function AdminShell({
 
         <div className="admin-sidebar__label">CONTROL ROOM</div>
         <nav className="admin-nav" aria-label="管理台导航">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const active = route === item.path;
             return (

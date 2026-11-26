@@ -6,27 +6,43 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.view.View;
+import android.webkit.WebView;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowWebView;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34)
 public class MainActivityTest {
     @Test
-    public void firstLaunchShowsSetupScreen() {
+    public void firstLaunchShowsLocalAlbum() {
         MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
         View setup = activity.findViewById(R.id.setup_scroll);
-        View web = activity.findViewById(R.id.web_view);
+        WebView web = activity.findViewById(R.id.web_view);
         assertNotNull(setup);
         assertNotNull(web);
-        assertEquals(View.VISIBLE, setup.getVisibility());
-        assertEquals(View.GONE, web.getVisibility());
-        assertNotNull(activity.findViewById(R.id.scan_button));
-        assertNotNull(activity.findViewById(R.id.url_input));
+        assertEquals(View.GONE, setup.getVisibility());
+        assertEquals(View.VISIBLE, web.getVisibility());
+        ShadowWebView shadow = Shadows.shadowOf(web);
+        assertEquals(
+                "https://appassets.androidplatform.net/assets/web/mobile-client.html",
+                shadow.getLastLoadedUrl());
+    }
+
+    @Test
+    public void connectScreenIsOptionalAndReturnsToLocal() {
+        MainActivity activity = Robolectric.buildActivity(MainActivity.class).setup().get();
+        activity.showConnect(false);
+        assertEquals(View.VISIBLE, activity.findViewById(R.id.setup_scroll).getVisibility());
+        assertEquals(View.GONE, activity.findViewById(R.id.web_view).getVisibility());
+        activity.returnToLocal();
+        assertEquals(View.GONE, activity.findViewById(R.id.setup_scroll).getVisibility());
+        assertEquals(View.VISIBLE, activity.findViewById(R.id.web_view).getVisibility());
     }
 
     @Test

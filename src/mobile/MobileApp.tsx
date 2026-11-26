@@ -12,6 +12,7 @@ import {
   ChevronRight,
   CircleAlert,
   Download,
+  Images,
   Loader2,
   MonitorSmartphone,
   RefreshCw,
@@ -42,6 +43,7 @@ import {
   type MobileHello,
   type MobilePhoto,
 } from './api';
+import { isAndroidShell } from './native';
 import '../styles/mobile-client.css';
 
 type BootState = 'checking' | 'ready' | 'unpaired' | 'unsupported' | 'error';
@@ -246,11 +248,13 @@ function ModeSheet({
   mode,
   onChange,
   onClose,
+  onLocal,
   busy,
 }: {
   mode: ReceiveMode;
   onChange: (mode: ReceiveMode) => void;
   onClose: () => void;
+  onLocal?: () => void;
   busy: boolean;
 }) {
   return (
@@ -297,6 +301,12 @@ function ModeSheet({
         <p className="m-sheet__note">
           这里和电脑端「手机同步」里的设置是同一个开关，改哪边都会同步。
         </p>
+        {onLocal ? (
+          <button type="button" className="m-button m-button--ghost m-sheet__local" onClick={onLocal}>
+            <Images size={15} />
+            返回本地相册（不连接电脑）
+          </button>
+        ) : null}
         <button type="button" className="m-button m-button--ghost" onClick={onClose}>
           完成
         </button>
@@ -868,6 +878,10 @@ export function MobileApp() {
     setViewer({ photos, index: Math.max(0, photos.findIndex((photo) => photo.id === featured.id)) });
   }, [featured, photos]);
 
+  const openLocal = useCallback(() => {
+    window.HoshikuzuAndroid?.openLocal?.();
+  }, []);
+
   const savePhoto = useCallback(
     async (photo: MobilePhoto) => {
       if (savingId) return;
@@ -1069,6 +1083,17 @@ export function MobileApp() {
           <i aria-hidden="true" />
           <small>{mode === 'stream' ? '实时' : '保存'}</small>
         </button>
+        {isAndroidShell() ? (
+          <button
+            type="button"
+            className="m-conn m-local-return"
+            onClick={openLocal}
+            aria-label="返回本地相册"
+          >
+            <Images size={12} />
+            <span>本地</span>
+          </button>
+        ) : null}
       </header>
 
       <main className="m-main">
@@ -1251,6 +1276,7 @@ export function MobileApp() {
           mode={mode}
           onChange={(next) => void changeMode(next)}
           onClose={() => setModeSheet(false)}
+          onLocal={isAndroidShell() ? openLocal : undefined}
           busy={modeBusy}
         />
       ) : null}

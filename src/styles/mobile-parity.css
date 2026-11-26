@@ -1,0 +1,157 @@
+/* ---------------------------------------------------------------- *
+ * Android shell: the shared desktop frontend, proportioned for a phone.
+ * This file must not fork the desktop layout; it only tightens spacing and
+ * keeps fixed chrome inside the Android viewport.
+ * ---------------------------------------------------------------- */
+
+html[data-mobile] {
+  --header-h: 64px;
+  -webkit-text-size-adjust: 100%;
+}
+
+html[data-mobile] body {
+  overscroll-behavior-y: none;
+}
+
+html[data-mobile] .site-header {
+  padding: 12px 0;
+}
+
+html[data-mobile] .site-header.is-scrolled {
+  padding: 8px 0;
+}
+
+html[data-mobile] .container {
+  width: calc(100% - 28px);
+}
+
+html[data-mobile] .hero {
+  padding: 112px 0 64px;
+}
+
+html[data-mobile] .hero-title {
+  font-size: clamp(40px, 12vw, 58px);
+}
+
+html[data-mobile] .hero-lede {
+  font-size: 12.5px;
+  line-height: 1.9;
+}
+
+html[data-mobile] .hero-feature {
+  width: 100%;
+}
+
+html[data-mobile] .timeline-intro {
+  gap: 18px;
+}
+
+html[data-mobile] .timeline-title {
+  font-size: 28px;
+}
+
+html[data-mobile] .timeline-body {
+  padding-top: 12px;
+}
+
+html[data-mobile] .footer-inner {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+}
+
+html[data-mobile] .appearance-panel {
+  max-height: 88dvh;
+  overflow-y: auto;
+}
+
+html[data-mobile] .admin-topbar {
+  min-height: 62px;
+  padding: 9px 14px;
+}
+
+html[data-mobile] .admin-topbar__title h1 {
+  font-size: 18px;
+}
+
+html[data-mobile] .admin-content {
+  padding: 18px 14px calc(64px + env(safe-area-inset-bottom));
+}
+
+html[data-mobile] .admin-page-head h2 {
+  font-size: 24px;
+}
+
+html[data-mobile] .admin-page-head__actions {
+  width: 100%;
+}
+
+html[data-mobile] .admin-sidebar {
+  width: min(84vw, 300px);
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+html[data-mobile] .admin-nav__item {
+  padding: 12px 11px;
+}
+
+html[data-mobile] .admin-panel {
+  padding: 16px;
+}
+
+html[data-mobile] .admin-stat {
+  padding: 14px;
+}
+
+html[data-mobile] .photo-detail {
+  width: 100%;
+  max-height: 100dvh;
+  border-radius: 0;
+}
+
+html[data-mobile] .detail-media {
+  max-height: 48dvh;
+}
+
+html[data-mobile] .detail-body {
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+}
+
+html[data-mobile] .modal-card {
+  width: calc(100% - 24px);
+  max-height: 92dvh;
+}
+
+html[data-mobile] .upload-dialog {
+  width: 100%;
+  max-height: 92dvh;
+}
+
+html[data-mobile] .toast-viewport {
+  right: 10px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 10px;
+}
+
+html[data-mobile] .toast {
+  max-width: 100%;
+}
+
+@media (max-width: 420px) {
+  html[data-mobile] .header-actions {
+    gap: 6px;
+  }
+
+  html[data-mobile] .header-upload {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+
+  html[data-mobile] .admin-topbar__title .section-kicker {
+    display: none;
+  }
+
+  html[data-mobile] .admin-content {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}

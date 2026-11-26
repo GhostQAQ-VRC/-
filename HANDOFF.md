@@ -7,17 +7,17 @@
 
 ---
 
-## 0. 最近交付摘要（1.1.0 手机客户端 → 1.0.2，下一个对话先读）
+## 0. 最近交付摘要（1.1.1 手机客户端同款前端 → 1.0.2，下一个对话先读）
 
-### 1.1.0 手机客户端与局域网双端同步（本轮，最新）
+### 1.1.1 手机客户端与桌面前端同款（本轮，最新）
 
-- **手机客户端**：桌面管理台新增「手机同步」（`#/admin/mobile`）。开启后桌面在局域网监听 HTTP（默认 7880），同时提供手机端 SPA `/m` 与相册 API。生成二维码指向 `http://<局域网IP>:<port>/m/<临时配对令牌>`；手机扫码后服务端写入 HttpOnly + SameSite=Strict 配对 Cookie 并 302 到 `/m`，手机保持页面打开即通过 SSE 显示“电脑在线”。
-- **双端同步**：手机读取桌面存储库的相册索引与缩略图，原图按需读取；桌面保存相册后主进程触发 SSE `album` 事件，手机自动重新拉取。投送模式 `stream`（默认；原图响应 `no-store`，手机只解码不落盘）/ `save`（浏览器下载/系统分享原图）。模式可在电脑或手机任一端切换，经 SSE `mode` 事件双向同步。
-- **投送手势**：桌面相册卡片长按 380ms 后向上拖 56px 松手，出现全屏投送层（浮动缩略图 + 手机落点），送达所有已连接手机；卡片手机按钮与照片详情「投送到手机」是等价入口。无手机连接时 IPC 返回明确提示，不会静默失败。
-- **手机端页面**：`src/mobile/` 为独立懒加载 chunk（约 28KB JS / 24KB CSS），不进入公开站首屏。手机时间轴按月分组，支持搜索 / 年份 / 世界筛选、全屏查看左右滑动、长按上滑保存到本机；投送接收浮层按模式显示“大屏查看 / 保存到手机 / 关闭”。手机端不读写桌面 localStorage，也不经过 `useAlbum`，因此不会污染桌面相册或公开站数据。
-- **安全边界**：仅局域网可达；配对令牌每次开启随机生成，刷新二维码会立即轮换并使旧链接失效；Cookie 为 HttpOnly + SameSite=Strict；缩略图/原图读取复用 `repository.resolveInside` / `resolveRealInside` 的越界防护；原图 `no-store`，缩略图按内容寻址长期缓存。
-- **验证**：`npm run build` 通过；`npm run test:desktop` **47 项通过**（新增 mobile-sync 6 项：相册裁剪与排序、模式/Cookie 归一化、网卡排序、配对鉴权 + 缩略图 + Range + SSE 投送、只读约束）；`npm run desktop:smoke` 通过，新增 `03g-mobile-sync.png`（二维码面板）、`03h-mobile-client.png`（390×844 手机页面）、`03i-mobile-incoming.png`（投送接收浮层）、`03j-mobile-cast.png`（桌面长按上滑投送层），并实测二维码生成、手机 SSE 在线、投送送达、双端模式同步、桌面手势释放与成功提示。
-- **Android APK（本轮新增）**：`mobile-android/` 是完整 Android 工程，产物 `mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.0.apk`（约 2.8MB，debug key 签名的 release 变体，可直接侧载）。原生连接页支持 zxing 扫码、手动地址、剪贴板粘贴、记住地址；配对后 WebView 加载同一套 `/m` 手机版，接管硬件返回键（先关查看器/投送浮层/模式弹层），连接后保持屏幕常亮。原生 `HoshikuzuAndroid.saveUrl()` 桥用 WebView Cookie 流式下载原图到 `下载/Hoshikuzu/`（Android 10+ MediaStore，Android 8/9 运行时存储权限），并让网页里的自动保存/手动保存都走原生路径。APK 通过 `aapt`/`apksigner` 校验（package `com.hoshikuzu.mobile`、minSdk 26、targetSdk 34、v2 签名）与 **Robolectric 7 项测试**（首启连接页、URL 归一化、非法 scheme、保存范围限制、文件名清洗、JS 桥拒绝非 HTTP）。本机没有 Android 模拟器硬件加速（无 AEHD/WHPX），因此**未做真机/模拟器启动**；真机扫码、实际保存路径与后台 SSE 仍需在手机上验证。
+- **同款前端**：APK 不再使用独立简化手机 UI，而是加载与桌面同一套 React 前端（公开时间轴、照片详情、管理台、站点设置、外观/特效、三档加载策略、AI 面板、云同步面板）。新增 `mobile-client.html` / `parityEntry.tsx` / `installMobileBridge.ts`，移动端只做比例与间距适配（`mobile-parity.css`）。
+- **本地优先**：APK 启动即进入本地相册，不需要电脑。相册数据保存在 WebView 本地存储；系统相册导入由原生 `MobileLibrary` 复制原图、生成 WebP 缩略图、读取 EXIF/文件名日期与 `wrld_`；原图/缩略图通过 `WebViewAssetLoader` 的 `/media/` 服务，保留桌面的缩略图/原图加载逻辑。
+- **平台桥**：移动端实现与 `DesktopBridge` 同名的 album/library/media 接口、Android Keystore 密钥存储、OkHttp 原生 HTTP（支持 WebDAV 自定义方法）、AI 四协议（OpenAI / Anthropic / Gemini / Ollama）与云同步（WebDAV、网站、Google Drive API、百度网盘 API）。依赖桌面云盘客户端同步文件夹的四种 folder 模式在手机上不适用，未列入手机端提供商。
+- **可选连接电脑**：公开站头部「连接电脑」打开原生扫码/地址页；配对后 WebView 加载桌面 `/m`，保留 SSE 投送、长按上滑保存、硬件返回与原生下载。连接不是启动前置。
+- **名称同步**：APK 名称 `VRchat时间轴纪念相册`，站内短名 `时间轴纪念相册`，与桌面客户端一致。
+- **桌面专属且手机不适用项隐藏**：EasyTier/TUN、P2P 传图、网络代理、桌面更新卡、手机同步服务端页、VRChat 官方封面面板。
+- **验证**：Web 构建通过；Android `assembleRelease` 通过；Robolectric **8/8** 通过；APK `aapt`/`apksigner` 校验通过（package `com.hoshikuzu.mobile`、versionName 1.1.1、minSdk 26、targetSdk 34、v2 签名）；390×844 Electron 预览验证同款首页、无桌面标题栏、连接入口、本地导入、原图详情、AI test/models/generate/batch、WebDAV/网站同步 mock 通过。本机无 AEHD/WHPX，**未做真机/模拟器启动**；真机扫码、相册导入、AI/云同步真实账号仍需手机验证。
 
 ### 1.0.0 → 1.0.2 摘要
 
@@ -33,15 +33,14 @@
 
 ### 当前现场状态（2026-11-26）
 
-- **本轮源码版本 1.1.0（手机测试版）**：`package.json` 已升到 1.1.0；本地构建/冒烟通过，尚未发布到 GitHub Release。线上 latest 仍是 `v1.0.2`，因此 1.1.0 启动时不会提示更新（当前版本高于线上）。
-- 手机客户端入口只在桌面客户端管理台「手机同步」里出现；公开网页不加载 `src/mobile` chunk，也不显示该入口。
-- 开发机用户实际运行便携版：配置在 `release/data/config.json`，存储库为 `C:\Users\DMSSD\OneDrive\图片\VRChat`（203 张 PNG：134 横 / 45 竖 / 24 方）。
-- 用户反馈的“横躺竖拍”样例：`2026-11\VRChat_2026-11-24_08-36-03.925_1920x1080.png`。文件是 1920×1080 像素、无 EXIF、内容被横向旋转；1.0.2 已提供卡片一键向左 90°、详情左右旋转和 AI 方向检测。开发端未改写用户相册数据，需用户在客户端点一次旋转或运行 AI 检测。
-- 便携版配置里已有 `aiApiKey`，但 `ai.baseUrl`、`ai.primaryModel` 为空、`ai.models=[]`；使用 AI 方向前需在高级设置获取模型并选择视觉模型。
-- GitHub 仓库 `GhostQAQ-VRC/-`；本机 Git Credential Manager 已登录 `GhostQAQ-VRC`，系统代理 `127.0.0.1:32437` 可访问 GitHub（源码 push 与 Release 资产上传均通过它）。
-- 发布方式：源码 push `main`；安装包作为 Release 资产（setup 约 107MB，超过 git 单文件 100MB 限制，不能提交进仓库）；线上 tag 仍为 `v1.0.2`。
-- **手机同步现场**：开发机 Wi-Fi 为 `192.168.31.175`；另有 VMware 虚拟网卡 `192.168.174.1` / `192.168.37.1`，管理台会把 Wi-Fi 排在前面。默认端口 7880，可用端口输入框修改；开启后 Windows 防火墙若拦截需放行。
-- 尚未验证：**真实手机扫码与 iOS Safari / Android Chrome 保存流程**、手机长时间保持前台时的 SSE 稳定性、203 张库在手机端的滚动性能；以及真实 VRChat 账号登录/封面拉取、真实视觉模型的 AI 方向检测、长视频压缩实测、NSIS 实际安装、代码签名/自动安装。
+- **本轮版本 1.1.1**：桌面与 Android 客户端代码版本一致；本地构建完成，等待发布 GitHub Release。
+- **APK**：`mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.1.apk`（约 4.4MB，debug key 签名的 release 变体，可直接侧载）；`release/VRchat-Timeline-Album-Mobile-1.1.1.apk` 为同一文件。
+- **桌面测试包**：`release/VRchat-Timeline-Album-1.1.1-portable.exe`（约 99MB）、`release/VRchat时间轴纪念相册-1.1.1-x64.exe`（约 108MB，未签名）、`release/win-unpacked/`。
+- **手机端能力**：本地相册（导入/缩略图/备注/旋转/删除/搜索/年份筛选）、同款外观/特效/加载策略、AI 四协议、云同步 WebDAV/网站/Google Drive API/百度网盘 API、可选连接电脑（扫码配对 + SSE 投送 + 原生保存）。
+- **未验证**：真机安装/相机扫码/系统相册导入、Android 8/9 存储权限、Android Keystore 在真机上的加解密、AI/云同步真实账号、锁屏/后台 SSE、不同厂商 WebView；本机无 AEHD/WHPX，模拟器无法启动。
+- 开发机 SDK：`G:/AI/Zcode/android-sdk`；Gradle 8.7：`G:/AI/Zcode/gradle-8.7`；JDK 21：`C:/Program Files/Java/dragonwell-21.0.5.0.5+9-GA`；Robolectric 离线 jar：`G:/AI/Zcode/robolectric-deps`。
+- 发布方式：源码 push `main`；桌面安装包/便携版/APK 作为 GitHub Release 资产（不能提交进 git 的安装包）。线上旧 Release 仍为 v1.0.2。
+- GitHub 仓库 `GhostQAQ-VRC/-`；GCM 已登录，系统代理 `127.0.0.1:32437` 可访问 GitHub。
 
 ---
 
@@ -65,9 +64,9 @@
 - AI 方向：**按角色头顶朝上 / 16:9 风景不旋转的规则**，用视觉模型单张或批量校正方向
 - 默认外观：**暮色紫 · 星轨交错 · 星轨**（7 主题 × 4 布局）
 - `npm run build` 已通过；`npm run test:desktop` **47 项通过**
-- 客户端冒烟已通过（含横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、更新检查、世界资料库官方面板、**手机同步二维码/手机页面/SSE 投送/桌面手势**）；`release/win-unpacked` 本轮已用 1.1.0 代码重新打包
-- 线上稳定版仍为 1.0.2；本轮 1.1.0 为本地手机测试版，尚未发布新 Release
-- 本地测试产物：`release/VRchat-Timeline-Album-Mobile-1.1.0.apk`（约 2.8MB，Android 客户端）、`release/VRchat-Timeline-Album-1.1.0-portable.exe`（约 99MB）、`release/VRchat时间轴纪念相册-1.1.0-x64.exe`（约 108MB）、`release/win-unpacked/`；便携版与 unpacked 均以 `HOSHIKUZU_SMOKE=1` 完整跑通（exit 0，含手机同步 4 张截图）
+- 客户端冒烟已通过（含横竖卡片、横躺竖拍旋转、视频背景 IPC/协议、代理模式、更新检查、世界资料库官方面板、**手机同步二维码/手机页面/SSE 投送/桌面手势**）；`release/win-unpacked` 本轮已用 1.1.1 代码重新打包
+- 线上稳定版仍为 1.0.2；本轮 1.1.1 为桌面 + 手机客户端，待发布新 Release
+- 本地测试产物：`release/VRchat-Timeline-Album-Mobile-1.1.1.apk`（约 4.4MB，Android 客户端）、`release/VRchat-Timeline-Album-1.1.1-portable.exe`（约 99MB）、`release/VRchat时间轴纪念相册-1.1.1-x64.exe`（约 108MB）、`release/win-unpacked/`；便携版与 unpacked 均以 `HOSHIKUZU_SMOKE=1` 完整跑通（exit 0，含手机同步 4 张截图）
 - GitHub 仓库：<https://github.com/GhostQAQ-VRC/->
 - Release 下载（1.0.2）：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.0.2>
   - `VRchat-Timeline-Album-1.0.2-x64-setup.exe`（NSIS，约 107MB，未签名）
@@ -322,7 +321,7 @@ mobile-android/                 # Android APK 工程（完整原生外壳）
     SaveBridge.java             # window.HoshikuzuAndroid.saveUrl 桥
     NativeDownloader.java       # Cookie 流式下载 → Downloads/Hoshikuzu（MediaStore / 旧版）
   app/src/main/res/             # 深色连接页、图标、主题、网络安全配置
-  app/src/test/                 # Robolectric 7 项测试
+  app/src/test/                 # Robolectric 8 项测试
   apk/                          # 已构建 APK + SHA-256（可侧载）
   README.md                     # 构建、安装、权限与测试说明
 tools/library-cli.cjs           # 独立存储引擎 CLI
@@ -379,7 +378,7 @@ electron-builder.yml
    - AI 方向：`ai.cjs` 新增 `buildOrientationPrompt` / `parseOrientationResponse` / `detectOrientation`。提示词明确「只看角色头顶（发旋/耳朵上方）朝向，不判断面朝哪边；没有人物主体时按 16:9 风景处理 rotation=0」。解析器只信 `head` 并自行换算（right→270、left→90、down→180），低置信度（<0.45）不自动改。IPC `ai:detect-orientation` 与批量 `mode='orientation'`；只处理无 rotation 且宽高比 1.68–1.86 的横图。详情页「AI 检测方向」，AI 面板「AI 校正方向」批量按钮与进度。
    - 更新提示：`update-check.cjs` 纯函数（版本比较、仓库 URL 白名单、setup/portable 资产选择）+ `ipc/update.cjs`（经 `network.networkSession()` 请求 GitHub `releases/latest`，15s 超时、5 分钟缓存、启动 4.5s 后检查、smoke 跳过自动检查）；`UpdateNotice` 右下角横幅显示版本/体积/下载/说明/稍后，按版本记录 dismissed；设置页 `UpdateCard` 手动检查。
    - 单测新增 8 项（AI 方向解析 3、AI 方向 mock 1、更新检测 4；总计 41 项）；冒烟 `settings extras` 验证 `update.check()` 返回 ok 且 latest=1.0.2，并用 1.0.0 版本号实测右下角更新横幅。
-23. **手机客户端与局域网双端同步（1.1.0，本轮）**：
+23. **手机客户端与局域网双端同步（1.1.x）**：
    - `mobile-sync.cjs`：独立 HTTP 服务（默认 7880），提供 `/m/<token>` 配对、`/m` SPA、`/api/mobile/hello|album|events|mode|leave`、`/api/mobile/photos/:id/thumb|original`（Range + 下载文件名）。SSE 活跃设备数为 0 时投送返回明确错误；`album` 保存后广播刷新；模式切换双向广播。
    - `buildMobileAlbum` 只输出手机可读字段和同源 URL，跳过缺失/内嵌 data URL 照片，保留 rotation、世界名与安全的原图文件名；不泄露 libraryPath、previewPath、AI 状态或活动日志。
    - `ipc/mobile.cjs`：开启/关闭、端口/网卡/模式、二维码（`qrcode` 生成 data URL）、刷新令牌、投送、断开设备、启动自动恢复；`config.mobile` 保存 enabled/port/preferredIp/receiveMode。
@@ -387,7 +386,7 @@ electron-builder.yml
    - 手机 UI：`/m` 独立懒加载 chunk，`MobileApp.tsx` 含两列月分组时间轴、搜索/年份/世界筛选、全屏查看左右滑动、长按上滑保存、投送接收层（实时查看 / 保存 / 关闭）、顶部在线状态与模式弹层；`api.ts` 处理配对、SSE、原图下载（Web Share 可用时分享，否则 blob 下载）、文件名与方向比例。
    - 安全/性能：HttpOnly + SameSite=Strict 配对 Cookie（12h）、令牌每次开启随机；`no-store` 原图、内容寻址缩略图缓存；复用 repository 的 realpath 越界防护；手机端不碰桌面 localStorage；`src/mobile` 不进入公开站首屏。
    - 单测新增 6 项（总计 47）；冒烟新增 4 张截图与二维码、390×844 手机页面、SSE 在线、投送浮层、双端模式同步、桌面长按上滑释放与 toast 断言。
-   - **Android APK**：`mobile-android/` 原生工程；`MainActivity` 连接页（扫码/手动/粘贴/记住地址）、WebView 加载 `/m`、403 配对过期/网络错误回到连接页、返回键先关网页浮层再弹刷新/切换/退出、连接后常亮；`SaveBridge` + `NativeDownloader` 用 WebView Cookie 流式保存原图（MediaStore / 旧版权限），网页 `src/mobile/native.ts` 检测桥并优先走原生保存；`mobile-android/README.md` 记录构建与安装。APK `1.1.0`（2.8MB，debug key 的 release 变体，minSdk 26/targetSdk 34）已放入 `mobile-android/apk/` 与 `release/`；Robolectric 7 项测试通过，`aapt`/`apksigner` 校验通过。受限于本机没有可用的 Android 模拟器加速，尚未真机启动。
+   - **Android APK**：`mobile-android/` 原生工程；`MainActivity` 连接页（扫码/手动/粘贴/记住地址）、WebView 加载 `/m`、403 配对过期/网络错误回到连接页、返回键先关网页浮层再弹刷新/切换/退出、连接后常亮；`SaveBridge` + `NativeDownloader` 用 WebView Cookie 流式保存原图（MediaStore / 旧版权限），网页 `src/mobile/native.ts` 检测桥并优先走原生保存；`mobile-android/README.md` 记录构建与安装。APK `1.1.1`（4.4MB，debug key 的 release 变体，minSdk 26/targetSdk 34）已放入 `mobile-android/apk/` 与 `release/`；Robolectric 8 项测试通过，`aapt`/`apksigner` 校验通过。受限于本机没有可用的 Android 模拟器加速，尚未真机启动。
 
 ---
 
@@ -412,10 +411,10 @@ electron-builder.yml
 - `npm run desktop:smoke:onboarding`：第 1 步首启向导
 - `npm run desktop:smoke:thumbnails`：第 2 步 5 档卡片、随机样张 A/B、生成进度 17/17 并提示完成、建立 `缩略图缓存`、扫描后时间轴缩略图可显示；未滚动时网格加载 0 张、滚动后预测加载 12 张；切换实时模式仅 4 张、预先模式预取 17/17、切回预测恢复 12 张；点开详情后原图 `naturalWidth>0` 且状态显示「原图」
 - `npm run desktop:dev`：Vite + Electron 开发模式，标题栏渲染、`data-desktop` 生效、无 CSP 告警
-- `release/win-unpacked/VRchat时间轴纪念相册.exe`：1.1.0 重新打包后以 `HOSHIKUZU_SMOKE=1` 启动，完整冒烟通过（exit 0）；1.0.2 包此前也已验证
-- `release/VRchat-Timeline-Album-1.1.0-portable.exe`：1.1.0 便携测试版，以 `HOSHIKUZU_SMOKE=1` 启动并通过完整冒烟（exit 0，生成手机同步截图）；与 `release/win-unpacked` 同源
-- `release/VRchat时间轴纪念相册-1.1.0-x64.exe`：1.1.0 NSIS 本地测试包（未签名，未上传）
-- `mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.0.apk`：Android 客户端；`aapt` 确认 package/version/minSdk/targetSdk/launchable activity，`apksigner` v2 校验通过；Robolectric **7/7** 通过
+- `release/win-unpacked/VRchat时间轴纪念相册.exe`：1.1.1 重新打包后以 `HOSHIKUZU_SMOKE=1` 启动，完整冒烟通过（exit 0）；1.0.2 包此前也已验证
+- `release/VRchat-Timeline-Album-1.1.1-portable.exe`：1.1.1 便携测试版，以 `HOSHIKUZU_SMOKE=1` 启动并通过完整冒烟（exit 0，生成手机同步截图）；与 `release/win-unpacked` 同源
+- `release/VRchat时间轴纪念相册-1.1.1-x64.exe`：1.1.1 NSIS 本地测试包（未签名，未上传）
+- `mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.1.apk`：Android 客户端；`aapt` 确认 package/version/minSdk/targetSdk/launchable activity，`apksigner` v2 校验通过；Robolectric **8/8** 通过
 - `release/VRchat时间轴纪念相册-1.0.2-x64.exe` / `release/VRchat-Timeline-Album-1.0.2-portable.exe`：线上 Release `v1.0.2`（未签名）
 - 60MP（10000×6000）JPEG：扫描成功，缩略图限制为 1600×960，原图不受影响
 - 存储 CLI：14 张示例图扫描、14 张预览、统计
@@ -469,7 +468,7 @@ electron-builder.yml
 - 代理测试会实际请求 VRChat `config`，网络不通时只影响测试结果；PAC 与自定义规则依赖 Chromium 规则语法。代理地址中暂不支持内嵌用户名/密码，请使用免认证的本地代理端口。
 - 银河黑洞是实验性背景，默认隐藏，需在管理台开启「实验性背景」；依赖 WebGL，不可用时回退 CSS；动态背景在 `prefers-reduced-motion` 下静态化。
 - **手机同步只监听局域网 HTTP（非 HTTPS）**：Web Share / 剪贴板 API 在部分浏览器不可用，保存走浏览器下载；iOS 切到后台会挂起页面导致 SSE 断开，回到前台会自动重连并重新拉取相册；Windows 防火墙未放行端口时手机打不开；投送模式目前是全局设置，所有已连接手机共享。二维码链接本身即配对凭证，服务开启期间请勿公开分享。
-- **Android APK**：`minSdk 26`（Android 8+），`targetSdk 34`；release 变体使用本机 debug key 签名，适合侧载测试，不适合上架。APK 只是 WebView 外壳，电脑端必须保持手机同步；Android 8/9 首次保存会请求存储权限，Android 10+ 存到 `下载/Hoshikuzu/`。WebView 在锁屏/后台仍会被系统限制，投送只在页面保持前台时最可靠；真机扫码、实际保存路径与不同厂商 WebView 兼容性尚未验证。
+- **Android APK**：`minSdk 26`（Android 8+），`targetSdk 34`；release 变体使用本机 debug key 签名，适合侧载测试，不适合上架。APK 默认进入**本地相册**，不要求连接电脑；连接电脑是可选的 `/m` 远程/投送模式。Android 8/9 首次保存会请求存储权限，Android 10+ 存到 `下载/Hoshikuzu/`。WebView 在锁屏/后台仍会被系统限制，投送只在页面保持前台时最可靠；真机相册导入、AI/云同步账号、不同厂商 WebView 兼容性尚未验证。
 - P2P 接收端绑定 `0.0.0.0`，依赖分享码保护；只应在可信虚拟网络使用。
 - `safeStorage` 绑定 Windows 用户；便携盘换机后需重新输入密钥。
 - 未做代码签名与自动更新；安装时可能触发 SmartScreen。
@@ -558,7 +557,7 @@ electron-builder.yml
 
 本版本已交付：网页 + Electron 客户端、独立存储库、两步首启与 5 档缩略图、三档图片加载策略、照片横竖识别与横躺竖拍旋转校正、AI 方向检测（角色头顶规则 / 16:9 风景不旋转）、客户端更新提示、EasyTier/P2P、AI 总结与 AI 识图 World ID、9 种动态背景（含视频背景）、实验性黑洞、紫月品牌图标、云盘/网站云同步、网络代理管理、VRChat 官方世界封面拉取、**局域网手机客户端（扫码配对 / SSE 双端同步 / 长按上滑投送 / 实时查看或保存到手机）**。下面是下一轮建议，按优先级排列：
 
-接手第一件事：确认用户运行的是本轮的 **1.1.0 手机测试版**（源码版本已升 1.1.0，本地 `release/win-unpacked` 已重新打包；线上 Release 仍是 1.0.2）。先让用户安装 `mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.0.apk`（或直接扫码用浏览器），在同一 Wi-Fi 下连接电脑，验证扫码、时间轴、SSE 在线、长按上滑投送、两种接收模式、APK 原生保存到「下载/Hoshikuzu」、返回键与锁屏/后台重连。APK 尚未真机验证；如果装不上，先检查 Android 版本（需 8+）、未知来源安装权限与 desktop 端是否开启手机同步。用户 2026-11-24 08:35/08:36 的几张 1920×1080 横躺竖拍照片仍需要一次手动旋转或 AI 方向检测。AI 方向需要先配置视觉模型（当前便携配置只有 API Key，没有模型/Base URL）。
+接手第一件事：让用户安装 **1.1.1 APK**（`mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.1.apk`），先验证**不连接电脑**的本地相册：系统相册导入、缩略图/原图、搜索/年份、外观/特效/加载策略、AI 设置与生成、WebDAV/Google/百度同步。再验证可选的「连接电脑」扫码、SSE 投送与原生保存。APK 尚未真机验证；如果装不上，先检查 Android 版本（需 8+）与未知来源安装权限。用户 2026-11-24 08:35/08:36 的几张 1920×1080 横躺竖拍照片仍需要一次手动旋转或 AI 方向检测。AI 方向需要先配置视觉模型（当前便携配置只有 API Key，没有模型/Base URL）。
 
 1. **真实环境验证（P0）**
    - **手机同步真机**：iPhone Safari 与 Android Chrome 各扫码一次，验证 12h Cookie 重开、二维码刷新后旧链接失效、页面切后台再回来 SSE 重连、原图查看/长按保存/下载文件名、投送两种模式；再用 203 张真实库测滚动与首屏时间。

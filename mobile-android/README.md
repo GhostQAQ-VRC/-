@@ -1,22 +1,43 @@
 # 时光轴相册 · Android 客户端
 
-手机端 APK 是局域网手机客户端的原生外壳：原生连接页负责扫码/输入电脑地址，配对成功后用 WebView 打开电脑提供的 `/m` 手机版。照片、投送和接收方式都复用同一套手机网页；保存原图通过原生桥直接写入手机下载目录。
+Android 客户端不是另做的一套简化手机 UI，而是**直接加载与桌面客户端同一套 React 前端**（公开时间轴、管理台、站点设置、外观/特效、三档图片加载策略、AI 面板、云同步面板）。移动端只做比例与间距适配；连接电脑是可选的远程/投送模式，本地相册默认可用。
 
-APK 文件：
+APK：
 
-- `apk/VRchat-Timeline-Album-Mobile-1.1.0.apk`
-- `apk/VRchat-Timeline-Album-Mobile-1.1.0.apk.sha256`
+- `apk/VRchat-Timeline-Album-Mobile-1.1.1.apk`
+- `apk/VRchat-Timeline-Album-Mobile-1.1.1.apk.sha256`
+
+## 架构
+
+```text
+mobile-client.html          手机端入口（与 index.html 共用 React 组件）
+src/mobile/parityEntry.tsx  安装平台桥后渲染同一套 App
+src/mobile/installMobileBridge.ts
+                            用 Android 桥实现 DesktopBridge：
+                            album / library / media / AI / sync / background / backup ...
+src/mobile/aiService.ts     OpenAI / Anthropic / Gemini / Ollama 四协议
+src/mobile/cloudSync.ts     WebDAV / 网站同步
+src/mobile/googleSync.ts    Google Drive API（Client ID/Secret + Token）
+src/mobile/baiduSync.ts     百度网盘 API（AppKey/SecretKey + Token，原生 MD5 分片）
+src/mobile/mobileHttp.ts    原生 OkHttp 网络桥，绕过 WebView CORS/WebDAV 方法限制
+```
+
+Android 原生：
+
+- `MainActivity`：默认加载 `assets/web/mobile-client.html`；可选连接页（扫码/手动地址/剪贴板）、返回键、连接后保持常亮。
+- `MobileLibrary`：系统相册导入，复制原图到应用目录，生成 WebP 缩略图，读取 EXIF/文件名日期与 `wrld_`。
+- `MobileMediaHandler`：通过 `WebViewAssetLoader` 的 `/media/` 提供原图/缩略图/背景，保留桌面的图片加载策略。
+- `SecureStore`：Android Keystore 加密保存 AI/云同步密钥。
+- `HttpBridge`：OkHttp 原生 HTTP，支持 WebDAV 自定义方法、二进制上传。
+- `SaveBridge`：JS 桥（相册导入、原生下载、密钥、HTTP、可选电脑连接）。
 
 ## 功能
 
-- 启动页：扫描电脑二维码、手动输入地址、从剪贴板粘贴；记住上一次连接的地址。
-- 相机扫码使用 `zxing-android-embedded`，自动识别 `http://<IP>:7880/m/<令牌>` 配对链接。
-- WebView 加载手机版：时间轴、搜索、年份/世界筛选、全屏查看、投送接收浮层、接收方式切换。
-- 原生保存桥：把原图流式写入 `下载/Hoshikuzu/`，沿用库内文件名；Android 10+ 使用 MediaStore，Android 8/9 使用运行时存储权限。
-- 硬件返回键优先关闭网页里的查看器/投送浮层/模式弹层，再处理网页历史，最后弹出「刷新 / 切换电脑 / 退出」。
-- 连接页会处理：电脑未开启、网络不可达、配对过期（HTTP 403）、电脑服务异常（5xx）。
-- 连接期间保持屏幕常亮（仅在前台、页面加载完成后）。
-- 纯局域网 HTTP，不使用互联网；配对令牌与 HttpOnly Cookie 由桌面端校验。
+- **本地相册**：启动即用，不需要电脑；系统相册导入、缩略图/原图、搜索/年份筛选、备注、旋转、删除、外观/特效/加载策略与桌面一致。
+- **AI**：OpenAI / Anthropic / Gemini / Ollama；模型列表、连接测试、单张总结、AI 识图 World ID、AI 方向检测、批量任务与进度/取消。
+- **云同步**：WebDAV、网站同步、Google Drive API、百度网盘 API；密钥写入 Android Keystore。依赖桌面云盘客户端同步文件夹的 folder 模式在手机上不适用，因此未列出。
+- **可选连接电脑**：公开站头部「连接电脑」→ 扫码/地址 → 加载桌面 `/m`；SSE 投送、长按上滑保存、原生下载到 `下载/Hoshikuzu/`。
+- **桌面专属且手机不适用项隐藏**：EasyTier/TUN、P2P 传图、网络代理、桌面更新、手机同步服务端页、VRChat 官方封面面板。
 
 ## 构建
 
@@ -26,22 +47,21 @@ APK 文件：
 - Android SDK Platform 34、Build-Tools 34.0.0
 - Gradle 8.7（仓库内包含 wrapper）
 
-**Android Gradle Plugin 不接受含中文的工程路径。** 如果仓库路径含中文（本仓库就是），请先把 `mobile-android` 复制到纯 ASCII 目录再构建：
+**AGP 不接受含中文的工程路径。** 本仓库路径含中文，请先复制到纯 ASCII 目录再构建：
 
 ```bash
-# Git Bash 示例
 rm -rf /g/AI/Zcode/build/hoshikuzu-mobile
 cp -r mobile-android /g/AI/Zcode/build/hoshikuzu-mobile
 cd /g/AI/Zcode/build/hoshikuzu-mobile
 printf 'sdk.dir=G:/AI/Zcode/android-sdk\n' > local.properties
-./gradlew.bat assembleRelease
-```
-
-Windows CMD / PowerShell 也可以用 `robocopy` 或直接复制。首次构建需要下载 Gradle/AndroidX/zxing 依赖；如果使用代理：
-
-```bash
+export JAVA_HOME="C:/Program Files/Java/dragonwell-21.0.5.0.5+9-GA"
+export ANDROID_HOME="G:/AI/Zcode/android-sdk"
 export GRADLE_OPTS="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=32437 -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=32437"
+./gradlew.bat assembleRelease \
+  -PwebDistDir="G:/AI/Zcode/网页/时光轴相册DS4.1F/dist"
 ```
+
+`-PwebDistDir` 指向已执行 `npm run build` 的 `dist`；Gradle 的 `syncWebAssets` 会把它同步到 APK 的 `assets/web/`。
 
 构建产物：
 
@@ -49,41 +69,43 @@ export GRADLE_OPTS="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=32437 -Dhttp.p
 app/build/outputs/apk/release/app-release.apk
 ```
 
-发布版目前使用本机 debug key 签名（`signingConfig signingConfigs.debug`），可以直接侧载安装；如果要正式分发，请在 `app/build.gradle` 里换成自己的 keystore，并妥善保存。
+发布版目前使用本机 debug key 签名（`signingConfig signingConfigs.debug`），可直接侧载。
 
 ## 测试
 
-`mobile-android` 包含 Robolectric 单元测试（7 项）：
-
 ```bash
 ./gradlew.bat testDebugUnitTest \
+  -PwebDistDir=".../dist" \
   -Drobolectric.offline=true \
-  -Drobolectric.dependency.dir=<包含 android-all-instrumented jar 的目录>
+  -Drobolectric.dependency.dir=G:/AI/Zcode/robolectric-deps
 ```
 
-覆盖：首启连接页显示、二维码/裸地址归一化、非法 scheme 拒绝、下载文件名清洗、HTTP 保存仅允许当前电脑、JS 桥拒绝非 HTTP。
+Robolectric **8 项**：默认本地页、可选连接页往返、URL 归一化、非法 scheme、下载域名限制、文件名清洗、JS 桥拒绝非 HTTP 等。
 
-当前机器没有可用的 Android 模拟器硬件加速（未安装 AEHD/WHPX），因此 APK 用 Robolectric + `aapt`/`apksigner` 静态校验；真机安装、相机扫码和实际下载路径仍需在手机上验证。
+另有 `tools/mobile-preview.cjs`（Electron 390×844 预览 + mock native bridge）：验证同款首页、无桌面标题栏、连接入口、本地导入、原图详情、AI test/models/generate/batch、WebDAV/网站同步 mock。
+
+当前机器没有可用的 Android 模拟器硬件加速（未安装 AEHD/WHPX），因此**未做真机/模拟器启动**；真机安装、系统相册导入、相机扫码、Keystore、AI/云同步真实账号仍需在手机上验证。
 
 ## 安装
 
 1. 把 APK 传到手机（USB、网盘、聊天工具均可）。
-2. 在系统设置中允许该来源安装未知应用。
-3. 打开「时光轴相册」。
-4. 电脑端：管理台 → 手机同步 → 开启；手机与电脑连同一个 Wi-Fi。
-5. 点「扫描电脑上的二维码」，或手动输入页面显示的链接。
-
-APK 只是客户端外壳，**电脑端必须保持手机同步开启**；关闭电脑或退出桌面客户端后，手机会显示连接失败/配对过期。
+2. 允许该来源安装未知应用。
+3. 打开「VRchat时间轴纪念相册」；默认进入本地相册，不需要电脑。
+4. 需要电脑上的相册/投送时，点公开站头部的「连接电脑」扫码；电脑端需开启「手机同步」。
 
 ## 文件结构
 
 ```text
 mobile-android/
   app/src/main/java/com/hoshikuzu/mobile/
-    MainActivity.java       # 连接页、扫码、WebView、错误与返回处理
-    SaveBridge.java         # window.HoshikuzuAndroid JS 桥
-    NativeDownloader.java   # 原图下载到 Downloads/Hoshikuzu
-  app/src/main/res/         # 连接页布局、主题、图标
-  app/src/test/             # Robolectric 测试
-  apk/                      # 已构建 APK 与 SHA-256
+    MainActivity.java       # 本地页/可选连接页/扫码/WebView/返回
+    MobileLibrary.java      # 相册导入、缩略图、EXIF/日期/World ID
+    MobileMediaHandler.java # /media 原图/缩略图/背景
+    SecureStore.java        # Android Keystore 密钥
+    HttpBridge.java         # OkHttp 原生 HTTP
+    SaveBridge.java         # JS 桥
+    NativeDownloader.java   # 远程模式原图下载
+  app/src/main/assets/web/  # 构建时同步的 dist
+  app/src/test/             # Robolectric 8 项
+  apk/                      # 已构建 APK + SHA-256
 ```

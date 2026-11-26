@@ -20,6 +20,7 @@ import { PhotoDetailDialog } from './components/PhotoDetailDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { AppearancePanel } from './components/AppearancePanel';
 import { rotatePhoto } from './utils/orientation';
+import { isMobileRuntime } from './platform/mobileRuntime';
 
 interface PublicSiteProps {
   album: AlbumApi;
@@ -253,6 +254,11 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
         appearanceOpen={appearanceOpen}
         appearanceButtonRef={appearanceButtonRef}
         worldApiEnabled={worldApiEnabled}
+        onConnectDesktop={
+          isMobileRuntime()
+            ? () => window.HoshikuzuAndroid?.openConnect?.()
+            : undefined
+        }
       />
 
       <main>

@@ -1,4 +1,5 @@
 import type { AlbumData, Photo } from '../types';
+import { isMobileRuntime, mobileMediaBase } from './mobileRuntime';
 
 export type MediaUrlKind = 'preview' | 'original' | 'background';
 
@@ -19,6 +20,12 @@ function normalizeRelative(value: string): string {
  */
 export function mediaUrl(kind: MediaUrlKind, relativePath: string): string {
   const safe = normalizeRelative(relativePath);
+  if (isMobileRuntime()) {
+    // The Android shell serves the same library-relative paths from app files
+    // through WebViewAssetLoader, so thumbnails/originals keep the desktop
+    // loading strategy and detail-dialog behavior.
+    return `${mobileMediaBase()}/${kind}/${safe}`;
+  }
   return `hoshikuzu-media://${kind}/${safe}`;
 }
 

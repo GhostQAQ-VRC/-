@@ -17,6 +17,7 @@ import { SafeImage } from '../components/SafeImage';
 import { AdminEmpty, AdminPageHead, AdminTag, formatAdminDate } from './AdminUI';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { VRChatPanel } from './VRChatPanel';
+import { isMobileRuntime } from '../platform/mobileRuntime';
 
 interface WorldsPageProps {
   album: AlbumApi;
@@ -431,7 +432,7 @@ export function WorldsPage({ album }: WorldsPageProps) {
         }
       />
 
-      <VRChatPanel album={album} />
+      {isMobileRuntime() ? null : <VRChatPanel album={album} />}
 
       <section className="admin-panel admin-toolbar-panel">
         <div className="admin-toolbar">

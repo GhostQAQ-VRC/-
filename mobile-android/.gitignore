@@ -4,4 +4,5 @@
 /.idea/
 /build/
 /app/build/
+/app/src/main/assets/web/
 .DS_Store

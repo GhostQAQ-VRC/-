@@ -234,7 +234,7 @@ npm run desktop:dist       # 生成 NSIS 安装包 + 便携版
    - SSE `cast` 事件送达所有在线手机，手机显示投送浮层；
    - 接收方式 `stream`（实时查看，不占手机空间）/ `save`（下载原图），可在任一端切换并实时同步。
 5. 手机端长按照片向上滑可保存当前照片；保存使用浏览器下载，iOS 落在「文件」，Android 落在浏览器下载目录。
-6. **Android APK**：`mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.0.apk`（约 2.8MB，Android 8+，debug key 签名）。原生连接页支持扫码/手动地址/剪贴板，配对后加载同一套手机版；保存原图由原生桥写入 `下载/Hoshikuzu/`（Android 10+ MediaStore，Android 8/9 请求存储权限）。硬件返回键会优先关闭查看器/投送浮层/模式弹层。APK 仍需电脑端开启手机同步。构建与安装见 `mobile-android/README.md`。
+6. **Android APK**：`mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.1.apk`（约 4.4MB，Android 8+，debug key 签名）。APK 直接加载与桌面同一套 React 前端，默认进入本地相册；系统相册导入由原生生成缩略图，AI 与云同步（WebDAV/网站/Google/百度）在手机端直接可用。连接电脑是可选入口：扫码后加载桌面 `/m`，保存原图由原生桥写入 `下载/Hoshikuzu/`。构建与安装见 `mobile-android/README.md`。
 7. 安全与网络：
    - 仅局域网，不经过互联网；未开启或退出客户端即断开；
    - 配对令牌每次随机生成，Cookie HttpOnly；媒体读取复用存储库的 realpath 越界防护；

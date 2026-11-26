@@ -40,6 +40,7 @@ import { DEMO_LOOKUP_HINT, lookupWorld } from '../services/worldService';
 import { useToast } from '../hooks/useToast';
 import { useDesktopLibrary } from '../hooks/useDesktopLibrary';
 import { getDesktopBridge } from '../platform';
+import { isMobileRuntime } from '../platform/mobileRuntime';
 import { backupFilename, downloadTextFile } from '../utils/download';
 import { formatDateShort } from '../utils/date';
 import { Modal } from '../components/Modal';
@@ -67,6 +68,7 @@ type DangerAction = 'samples' | 'photos' | 'reset' | null;
 export function SettingsPage({ album, auth }: SettingsPageProps) {
   const { pushToast } = useToast();
   const desktop = getDesktopBridge();
+  const mobile = isMobileRuntime();
   const library = useDesktopLibrary();
   const [siteName, setSiteName] = useState(album.settings.siteName);
   const [siteNameEn, setSiteNameEn] = useState(album.settings.siteNameEn);
@@ -579,7 +581,15 @@ export function SettingsPage({ album, auth }: SettingsPageProps) {
         </div>
       </AdminPanel>
 
-      <LibraryPanel album={album} />
+      {mobile ? (
+        <AdminPanel kicker="LOCAL LIBRARY" title="手机本地相册">
+          <p className="admin-panel__note">
+            手机端照片保存在应用内，导入时自动生成缩略图；原文件仍保留在系统相册。桌面端的文件夹扫描与缩略图目录配置不适用于手机。
+          </p>
+        </AdminPanel>
+      ) : (
+        <LibraryPanel album={album} />
+      )}
 
       <div className="admin-grid admin-grid--settings">
         <AdminPanel kicker="SITE IDENTITY" title="站点身份">
@@ -782,7 +792,7 @@ export function SettingsPage({ album, auth }: SettingsPageProps) {
           </div>
         </AdminPanel>
 
-        <NetworkPanel />
+        {mobile ? null : <NetworkPanel />}
 
         <AdminPanel kicker="DATA & BACKUP" title="数据与备份">
           <div className="admin-data-summary">
@@ -960,7 +970,7 @@ export function SettingsPage({ album, auth }: SettingsPageProps) {
           </div>
         </AdminPanel>
 
-        <UpdateCard />
+        {mobile ? null : <UpdateCard />}
       </div>
 
       <AdminPanel kicker="STORAGE" title="存储概览">
