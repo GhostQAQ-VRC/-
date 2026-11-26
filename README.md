@@ -10,6 +10,7 @@
 
 > 版本：**v2 数据架构 · 客户端 1.1（手机测试版）**
 > 客户端下载：[GitHub Releases](https://github.com/GhostQAQ-VRC/-/releases/latest)
+> 最新 1.1.1 资产：[桌面 setup](https://github.com/GhostQAQ-VRC/-/releases/download/v1.1.1/VRchat-Timeline-Album-1.1.1-x64-setup.exe) · [桌面便携版](https://github.com/GhostQAQ-VRC/-/releases/download/v1.1.1/VRchat-Timeline-Album-1.1.1-portable.exe) · [Android APK](https://github.com/GhostQAQ-VRC/-/releases/download/v1.1.1/VRchat-Timeline-Album-Mobile-1.1.1.apk)
 > 源码仓库：[GhostQAQ-VRC/-](https://github.com/GhostQAQ-VRC/-)
 > 公开相册：`#/`
 > 管理台：`#/admin`

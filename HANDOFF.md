@@ -33,13 +33,14 @@
 
 ### 当前现场状态（2026-11-26）
 
-- **本轮版本 1.1.1**：桌面与 Android 客户端代码版本一致；本地构建完成，等待发布 GitHub Release。
+- **本轮版本 1.1.1**：桌面与 Android 客户端代码版本一致；GitHub Release `v1.1.1` 已发布（latest）。
+- **Release**：<https://github.com/GhostQAQ-VRC/-/releases/tag/v1.1.1>；资产：`VRchat-Timeline-Album-1.1.1-portable.exe`、`VRchat-Timeline-Album-1.1.1-x64-setup.exe`、`VRchat-Timeline-Album-Mobile-1.1.1.apk`、`...apk.sha256`。
 - **APK**：`mobile-android/apk/VRchat-Timeline-Album-Mobile-1.1.1.apk`（约 4.4MB，debug key 签名的 release 变体，可直接侧载）；`release/VRchat-Timeline-Album-Mobile-1.1.1.apk` 为同一文件。
 - **桌面测试包**：`release/VRchat-Timeline-Album-1.1.1-portable.exe`（约 99MB）、`release/VRchat时间轴纪念相册-1.1.1-x64.exe`（约 108MB，未签名）、`release/win-unpacked/`。
 - **手机端能力**：本地相册（导入/缩略图/备注/旋转/删除/搜索/年份筛选）、同款外观/特效/加载策略、AI 四协议、云同步 WebDAV/网站/Google Drive API/百度网盘 API、可选连接电脑（扫码配对 + SSE 投送 + 原生保存）。
 - **未验证**：真机安装/相机扫码/系统相册导入、Android 8/9 存储权限、Android Keystore 在真机上的加解密、AI/云同步真实账号、锁屏/后台 SSE、不同厂商 WebView；本机无 AEHD/WHPX，模拟器无法启动。
 - 开发机 SDK：`G:/AI/Zcode/android-sdk`；Gradle 8.7：`G:/AI/Zcode/gradle-8.7`；JDK 21：`C:/Program Files/Java/dragonwell-21.0.5.0.5+9-GA`；Robolectric 离线 jar：`G:/AI/Zcode/robolectric-deps`。
-- 发布方式：源码 push `main`；桌面安装包/便携版/APK 作为 GitHub Release 资产（不能提交进 git 的安装包）。线上旧 Release 仍为 v1.0.2。
+- 发布方式：源码 push `main`；桌面安装包/便携版/APK 作为 GitHub Release 资产（不能提交进 git 的安装包）。当前 latest 为 `v1.1.1`。
 - GitHub 仓库 `GhostQAQ-VRC/-`；GCM 已登录，系统代理 `127.0.0.1:32437` 可访问 GitHub。
 
 ---

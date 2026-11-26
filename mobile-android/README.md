@@ -4,6 +4,7 @@ Android 客户端不是另做的一套简化手机 UI，而是**直接加载与�
 
 APK：
 
+- 发布下载：<https://github.com/GhostQAQ-VRC/-/releases/download/v1.1.1/VRchat-Timeline-Album-Mobile-1.1.1.apk>
 - `apk/VRchat-Timeline-Album-Mobile-1.1.1.apk`
 - `apk/VRchat-Timeline-Album-Mobile-1.1.1.apk.sha256`
 
