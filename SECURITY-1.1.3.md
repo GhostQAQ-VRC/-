@@ -20,7 +20,7 @@
 | 版本 | **1.1.3**（原 1.1.2） |
 | 桌面依赖 | Electron **45.5.0** / sharp **0.35.5** |
 | Git tag | `v1.1.3` |
-| Release | <https://github.com/GhostQAQ-VRC/-/releases/tag/v1.1.3> |
+| Release | <https://github.com/GhostQAQ-VRC/-/releases/tag/v1.1.3>（latest，4/4 资产 uploaded） |
 | APK versionCode | **5** / versionName `1.1.3` |
 
 ---
