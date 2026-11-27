@@ -342,6 +342,9 @@ class MobileSyncService {
     this.server = null;
     this.port = DEFAULT_PORT;
     this.token = '';
+    this.sessionTokens = new Set();
+    this.pairFailures = 0;
+    this.pairFailedAt = 0;
     this.startedAt = null;
     this.sessions = new Map();
     this.blockedDevices = new Set();
@@ -528,6 +531,9 @@ class MobileSyncService {
       }
     }
     this.sessions.clear();
+    // Every restart rotates the QR token and invalidates all sessions.
+    this.sessionTokens.clear();
+    this.pairFailures = 0;
     if (!this.server) return { ok: true, status: this.status() };
     const server = this.server;
     this.server = null;
@@ -665,6 +671,18 @@ class MobileSyncService {
   async handlePair(req, res, token) {
     const supplied = String(token || '').replace(/\/+$/, '');
     if (!this.server || !tokensEqual(supplied, this.token)) {
+      // Rate-limit repeated bad guesses so a LAN scanner cannot brute force.
+      this.pairFailures = (this.pairFailures || 0) + 1;
+      this.pairFailedAt = Date.now();
+      if (this.pairFailures > 30) {
+        res.setHeader('retry-after', '5');
+        this.sendHtml(
+          res,
+          429,
+          '<!doctype html><html lang="zh-CN"><body>尝试过于频繁，请稍后再试。</body></html>',
+        );
+        return;
+      }
       this.sendHtml(
         res,
         403,
@@ -678,8 +696,13 @@ class MobileSyncService {
       return;
     }
     const deviceId = crypto.randomBytes(12).toString('base64url');
+    // Issue a per-pairing session token. The long-lived QR token is exchanged
+    // for it once and never stored on the phone in cookie form.
+    const sessionToken = crypto.randomBytes(24).toString('base64url');
+    this.sessionTokens.add(sessionToken);
+    this.pairFailures = 0;
     res.setHeader('Set-Cookie', [
-      cookie(COOKIE_NAME, this.token),
+      cookie(COOKIE_NAME, sessionToken),
       cookie(DEVICE_COOKIE, deviceId),
     ]);
     res.writeHead(302, { Location: '/m' });
@@ -687,15 +710,29 @@ class MobileSyncService {
   }
 
   authToken(req, url) {
+    // Query-string tokens are rejected: the pairing token must never travel in
+    // a URL that proxies, browsers or logs could retain.
     const cookies = parseCookies(req.headers.cookie);
     if (cookies[COOKIE_NAME]) return cookies[COOKIE_NAME];
     const header = req.headers['x-mobile-token'];
     if (typeof header === 'string' && header) return header;
-    return url.searchParams.get('token') || '';
+    if (url.searchParams.has('token')) return '';
+    return '';
   }
 
   authorized(req, url) {
-    return Boolean(this.token) && tokensEqual(this.authToken(req, url), this.token);
+    if (!this.token) return false;
+    const supplied = this.authToken(req, url);
+    if (!supplied) return false;
+    // Session tokens are paired-device cookies; verify by membership without
+    // timing-sensitive comparison against each entry.
+    if (this.sessionTokens.size > 0 && this.sessionTokens.has(supplied)) return true;
+    // The x-mobile-token header path (used by the desktop smoke harness) still
+    // accepts the pairing token itself, compared in constant time.
+    if (req.headers['x-mobile-token'] !== undefined) {
+      return tokensEqual(supplied, this.token);
+    }
+    return false;
   }
 
   sessionFor(req, res) {
@@ -827,6 +864,10 @@ class MobileSyncService {
 
     if (req.method === 'POST' && pathname === '/api/mobile/leave') {
       const session = this.sessionFor(req, res);
+      // Leaving also invalidates this device's session token so the cookie
+      // cannot be replayed after the phone closes the page.
+      const cookieToken = parseCookies(req.headers.cookie)[COOKIE_NAME];
+      if (cookieToken) this.sessionTokens.delete(cookieToken);
       if (session.res) {
         try {
           session.res.end();

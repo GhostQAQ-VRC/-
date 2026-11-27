@@ -308,7 +308,7 @@ export function installMobileBridge(): void {
   };
 
   const bridge: any = {
-    version: '1.1.1-mobile',
+    version: '1.1.2-mobile',
     platform: 'android',
     album: {
       loadSync: () => ({

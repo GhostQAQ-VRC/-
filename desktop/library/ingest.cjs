@@ -15,6 +15,43 @@ const { quickContentHash } = require('./quick-hash.cjs');
 const { readPhotoMetadata } = require('./metadata.cjs');
 const { generatePreview, readImageDimensions } = require('./preview.cjs');
 
+/**
+ * Known-good magic bytes per accepted extension. Files whose content does not
+ * match are rejected before entering the library, so a renamed executable or
+ * polyglot payload never lands in the photo folder.
+ */
+const MAGIC_SIGNATURES = {
+  '.jpg': [Buffer.from([0xff, 0xd8, 0xff])],
+  '.jpeg': [Buffer.from([0xff, 0xd8, 0xff])],
+  '.png': [Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+  '.webp': [Buffer.from('RIFF')],
+  '.avif': [
+    Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66]),
+  ],
+  '.gif': [Buffer.from('GIF87a'), Buffer.from('GIF89a')],
+  '.bmp': [Buffer.from([0x42, 0x4d])],
+  '.heic': [Buffer.from([0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70])],
+  '.heif': [Buffer.from([0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70])],
+  '.tif': [Buffer.from([0x49, 0x49, 0x2a, 0x00]), Buffer.from([0x4d, 0x4d, 0x00, 0x2a])],
+  '.tiff': [Buffer.from([0x49, 0x49, 0x2a, 0x00]), Buffer.from([0x4d, 0x4d, 0x00, 0x2a])],
+};
+
+function looksLikeImage(absolutePath, extension) {
+  const signatures = MAGIC_SIGNATURES[extension.toLowerCase()];
+  if (!signatures) return true;
+  const fd = require('node:fs').openSync(absolutePath, 'r');
+  try {
+    const longest = Math.max(...signatures.map((sig) => sig.length));
+    const buffer = Buffer.alloc(longest);
+    const read = require('node:fs').readSync(fd, buffer, 0, longest, 0);
+    if (read <= 0) return false;
+    const head = buffer.subarray(0, read);
+    return signatures.some((signature) => head.subarray(0, signature.length).equals(signature));
+  } finally {
+    require('node:fs').closeSync(fd);
+  }
+}
+
 function sanitizeFileName(value) {
   const base = path.basename(String(value || 'photo'));
   let safe = base
@@ -139,6 +176,9 @@ async function importPaths(root, paths, options = {}) {
       if (!IMAGE_EXTENSIONS.has(path.extname(originalName).toLowerCase())) {
         throw new Error('不支持的图片格式。');
       }
+      if (!looksLikeImage(source, path.extname(originalName).toLowerCase())) {
+        throw new Error('文件内容与图片格式不符，已拒绝导入（可能是伪装成图片的文件）。');
+      }
 
       const inbox = path.join(root, inboxRoot, day);
       await fsp.mkdir(inbox, { recursive: true });
@@ -243,6 +283,10 @@ async function importReceivedFile(root, tempPath, originalName, options = {}) {
   if (!IMAGE_EXTENSIONS.has(path.extname(name).toLowerCase())) {
     await fsp.rm(tempPath, { force: true }).catch(() => {});
     throw new Error('不支持的图片格式。');
+  }
+  if (!looksLikeImage(tempPath, path.extname(name).toLowerCase())) {
+    await fsp.rm(tempPath, { force: true }).catch(() => {});
+    throw new Error('文件内容与图片格式不符，已拒绝接收（可能是伪装成图片的文件）。');
   }
 
   const day = new Date().toISOString().slice(0, 10);

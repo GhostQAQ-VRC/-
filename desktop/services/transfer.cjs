@@ -271,6 +271,12 @@ class TransferService {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
+      // Same information as ping but behind the token: unauthenticated LAN
+      // scanners must not be able to confirm this is a photo receiver.
+      if (!tokensEqual(this.requestToken(req), this.token)) {
+        this.sendJson(res, 401, { ok: false, error: '分享码不正确。' });
+        return;
+      }
       this.sendJson(res, 200, { ok: true, uptime: this.startedAt });
       return;
     }

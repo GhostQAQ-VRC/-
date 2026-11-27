@@ -53,7 +53,7 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity {
     private static final String PREFS = "hoshikuzu_mobile";
     private static final String KEY_URL = "server_url";
-    private static final String APP_VERSION = "1.1.1";
+    private static final String APP_VERSION = "1.1.2";
     private static final String LOCAL_URL =
             "https://appassets.androidplatform.net/assets/web/mobile-client.html";
     private static final String LOCAL_HOST = "appassets.androidplatform.net";
@@ -200,7 +200,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setUserAgentString(
                 settings.getUserAgentString() + " HoshikuzuMobile/" + APP_VERSION);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            settings.setSafeBrowsingEnabled(false);
+            settings.setSafeBrowsingEnabled(true);
         }
 
         webView.setBackgroundColor(ContextCompat.getColor(this, R.color.bg_deep));
@@ -253,6 +253,32 @@ public class MainActivity extends AppCompatActivity {
             return LOCAL_HOST.equalsIgnoreCase(uri.getHost())
                     && path != null
                     && path.startsWith("/assets/web/");
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
+    /**
+     * True only while the WebView shows the bundled local album. The JS bridge
+     * refuses privileged calls (secure store, HTTP proxy, import, delete) from
+     * any other page, so a hostile paired "desktop" cannot touch local secrets.
+     */
+    boolean isOnLocalOrigin() {
+        return isLocalUrl(webView == null ? null : webView.getUrl());
+    }
+
+    /**
+     * External links from the local page open in the browser, but only http(s)
+     * targets — no intent:// or file:// tricks through the bridge.
+     */
+    private boolean isSafeExternalUrl(String url) {
+        if (url == null) return false;
+        try {
+            Uri uri = Uri.parse(url.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null) return false;
+            scheme = scheme.toLowerCase(Locale.ROOT);
+            return scheme.equals("http") || scheme.equals("https");
         } catch (Exception error) {
             return false;
         }
@@ -578,9 +604,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void openExternal(String url) {
-        if (url == null) return;
+        if (!isSafeExternalUrl(url)) return;
         try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim())));
         } catch (Exception error) {
             Toast.makeText(this, "无法打开链接", Toast.LENGTH_SHORT).show();
         }

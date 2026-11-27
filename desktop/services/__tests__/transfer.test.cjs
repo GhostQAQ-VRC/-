@@ -129,3 +129,44 @@ test('receiver rejects missing token and bad content length', async () => {
     await fs.rm(base, { recursive: true, force: true });
   }
 });
+
+test('health endpoint requires the token and uploads are magic-byte checked', async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-transfer-sec-'));
+  const root = path.join(temp, 'library');
+  await fs.mkdir(root, { recursive: true });
+  await repository.ensureLibrary(root, { name: 'sec' });
+  const service = new TransferService({
+    getRoot: () => root,
+    importReceived: async (r, tempPath, name, maxEdge) =>
+      ingest.importReceivedFile(r, tempPath, name, { previewMaxEdge: maxEdge }),
+    getPreviewMaxEdge: async () => 1280,
+  });
+  try {
+    await service.startReceiver({ port: 0, token: 'secret' });
+    const port = service.status().port;
+    // Health without a token is rejected instead of announcing the receiver.
+    const noAuth = await fetch(`http://127.0.0.1:${port}/api/health`);
+    assert.equal(noAuth.status, 401);
+    const withToken = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: { authorization: 'Bearer secret' },
+    });
+    assert.equal(withToken.status, 200);
+    // A .png extension whose content is not a PNG must be refused.
+    const payload = Buffer.from('MZ\u0000\u0000\u0000\u0000'); // PE header pretending to be an image
+    const upload = await fetch(`http://127.0.0.1:${port}/api/upload?name=trojan.png`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer secret',
+        'content-type': 'application/octet-stream',
+        'content-length': String(payload.length),
+      },
+      body: payload,
+    });
+    assert.equal(upload.status, 500);
+    const json = await upload.json().catch(() => null);
+    assert.match(JSON.stringify(json), /格式不符|伪装/);
+  } finally {
+    await service.stopReceiver();
+    await fs.rm(temp, { recursive: true, force: true }).catch(() => {});
+  }
+});

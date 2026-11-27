@@ -100,11 +100,29 @@ export async function createAdminCredential(passphrase: string): Promise<void> {
   unlockAdminSession();
 }
 
+/**
+ * Constant-time equality so the passphrase check never leaks how many leading
+ * bytes of the stored hash matched.
+ */
+function timingSafeEqualStrings(a: string, b: string): boolean {
+  const left = new TextEncoder().encode(a);
+  const right = new TextEncoder().encode(b);
+  if (left.length !== right.length) {
+    // Compare against self to keep the loop count independent of the mismatch.
+    let mismatch = left.length ^ right.length;
+    for (let index = 0; index < left.length; index += 1) mismatch |= left[index] ^ left[index];
+    return mismatch === 0;
+  }
+  let mismatch = 0;
+  for (let index = 0; index < left.length; index += 1) mismatch |= left[index] ^ right[index];
+  return mismatch === 0;
+}
+
 export async function verifyAdminPassphrase(passphrase: string): Promise<boolean> {
   const credential = readCredential();
   if (!credential) return false;
   const hash = await deriveHash(passphrase, base64ToBytes(credential.salt));
-  return hash === credential.hash;
+  return timingSafeEqualStrings(hash, credential.hash);
 }
 
 export async function changeAdminCredential(

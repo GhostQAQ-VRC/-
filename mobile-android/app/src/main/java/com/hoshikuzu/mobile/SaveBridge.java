@@ -17,10 +17,15 @@ public class SaveBridge {
         this.activityRef = new WeakReference<>(activity);
     }
 
+    /** Only the bundled local album page may call the native bridge. */
+    private boolean localOnly() {
+        return activityRef.get() != null && activityRef.get().isOnLocalOrigin();
+    }
+
     @JavascriptInterface
     public boolean saveUrl(String name, String url) {
         MainActivity activity = activityRef.get();
-        if (activity == null || activity.isFinishing()) return false;
+        if (activity == null || activity.isFinishing() || !localOnly()) return false;
         if (url == null) return false;
         String target = url.trim();
         if (!target.startsWith("http://") && !target.startsWith("https://")) return false;
@@ -34,7 +39,7 @@ public class SaveBridge {
     @JavascriptInterface
     public void toast(String message) {
         MainActivity activity = activityRef.get();
-        if (activity == null || message == null) return;
+        if (activity == null || !localOnly()) return;
         activity.runOnUiThread(() ->
                 android.widget.Toast.makeText(activity, message, android.widget.Toast.LENGTH_SHORT).show());
     }
@@ -42,58 +47,58 @@ public class SaveBridge {
     @JavascriptInterface
     public String appVersion() {
         MainActivity activity = activityRef.get();
-        return activity == null ? "1.1.1" : activity.appVersion();
+        return activity == null ? "1.1.2" : activity.appVersion();
     }
 
     @JavascriptInterface
     public void pickMedia(String callbackId, int maxEdge, int quality) {
         MainActivity activity = activityRef.get();
-        if (activity == null || activity.isFinishing() || callbackId == null) return;
+        if (activity == null || activity.isFinishing() || !localOnly()) return;
         activity.runOnUiThread(() -> activity.pickMedia(callbackId, maxEdge, quality));
     }
 
     @JavascriptInterface
     public boolean deleteManaged(String contentHash) {
         MainActivity activity = activityRef.get();
-        return activity != null && activity.deleteManaged(contentHash);
+        return activity != null && localOnly() && activity.deleteManaged(contentHash);
     }
 
     @JavascriptInterface
     public String secureGet(String key) {
         MainActivity activity = activityRef.get();
-        return activity == null ? null : activity.secureGet(key);
+        return activity == null || !localOnly() ? null : activity.secureGet(key);
     }
 
     @JavascriptInterface
     public boolean secureSet(String key, String value) {
         MainActivity activity = activityRef.get();
-        return activity != null && activity.secureSet(key, value);
+        return activity != null && localOnly() && activity.secureSet(key, value);
     }
 
     @JavascriptInterface
     public boolean secureDelete(String key) {
         MainActivity activity = activityRef.get();
-        return activity != null && activity.secureDelete(key);
+        return activity != null && localOnly() && activity.secureDelete(key);
     }
 
     @JavascriptInterface
     public void openExternal(String url) {
         MainActivity activity = activityRef.get();
-        if (activity == null) return;
+        if (activity == null || !localOnly()) return;
         activity.runOnUiThread(() -> activity.openExternal(url));
     }
 
     @JavascriptInterface
     public void httpRequest(String callbackId, String requestJson) {
         MainActivity activity = activityRef.get();
-        if (activity == null || callbackId == null || requestJson == null) return;
+        if (activity == null || !localOnly() || callbackId == null || requestJson == null) return;
         activity.runOnUiThread(() -> activity.httpRequest(callbackId, requestJson));
     }
 
     @JavascriptInterface
     public String md5Hex(String base64) {
         MainActivity activity = activityRef.get();
-        return activity == null ? "" : activity.md5Hex(base64);
+        return activity == null || !localOnly() ? "" : activity.md5Hex(base64);
     }
 
     @JavascriptInterface

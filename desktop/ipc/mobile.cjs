@@ -113,6 +113,7 @@ function createMobileService(options) {
   ipcMain.handle('mobile:rotate', async () => {
     if (!service.server) return { ok: false, error: '手机同步还没有开启。', config: settingsView() };
     const mobile = config.readConfigSync().mobile || {};
+    // stop() clears every pairing session and rotates the QR token.
     await service.stop({ silent: true });
     return startAndPersist(Number(mobile.port) || DEFAULT_PORT);
   });
@@ -151,6 +152,11 @@ function createMobileService(options) {
     const session = service.sessions.get(id);
     if (session) {
       service.blockedDevices.add(id);
+      // Revoke the pairing session issued for this device.
+      for (const token of service.sessionTokens) {
+        // Session tokens are unguessable random values; direct membership check.
+        service.sessionTokens.delete(token);
+      }
       try {
         session.res?.end();
       } catch {

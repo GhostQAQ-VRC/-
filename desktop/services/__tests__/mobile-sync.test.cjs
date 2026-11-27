@@ -323,3 +323,45 @@ test('file bytes stay untouched by the mobile service', async () => {
   assert.equal(before.size, after.size);
   await fsp.rm(temp, { recursive: true, force: true });
 });
+
+test('token never authenticates through the URL query string', async () => {
+  const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-mobile-tok-'));
+  const dist = path.join(temp, 'dist');
+  await fsp.mkdir(dist, { recursive: true });
+  await fsp.writeFile(path.join(dist, 'index.html'), '<!doctype html><html><body>phone</body></html>');
+  const service = new MobileSyncService({
+    distDir: dist,
+    getRoot: () => path.join(temp, 'library'),
+    getAlbum: () => makeAlbum(),
+    getPreviewDir: () => path.join(temp, 'previews'),
+    getSettings: () => ({ enabled: true, port: 0, preferredIp: '', receiveMode: 'stream' }),
+    updateSettings: async () => {},
+  });
+  try {
+    const started = await service.start({ port: 0 });
+    assert.equal(started.ok, true);
+    // The pairing token in a query string must never grant access.
+    const viaQuery = await request(service, `/api/mobile/album?token=${service.token}`);
+    assert.equal(viaQuery.status, 401);
+    // ... and the cookie issued at pairing is a distinct session token.
+    const pair = await request(service, `/m/${service.token}`);
+    assert.equal(pair.status, 302);
+    const cookies = cookieHeaderFrom(pair);
+    const cookieToken = /hoshikuzu_mobile=([^;]+)/.exec(cookies)?.[1] || '';
+    assert.ok(cookieToken);
+    assert.notEqual(cookieToken, service.token);
+    const album = await request(service, '/api/mobile/album', { headers: { Cookie: cookies } });
+    assert.equal(album.status, 200);
+    // Leaving revokes the session token.
+    const leave = await request(service, '/api/mobile/leave', {
+      method: 'POST',
+      headers: { Cookie: cookies },
+    });
+    assert.equal(leave.status, 200);
+    const after = await request(service, '/api/mobile/album', { headers: { Cookie: cookies } });
+    assert.equal(after.status, 401);
+  } finally {
+    await service.stop({ silent: true });
+    await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});
+  }
+});

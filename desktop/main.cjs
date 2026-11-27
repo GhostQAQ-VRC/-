@@ -509,6 +509,13 @@ async function createWindow() {
     return { action: 'deny' };
   });
 
+  // The album is fully local: deny every web permission request (geolocation,
+  // notifications, midi, camera…) instead of silently granting them.
+  contents.session.setPermissionRequestHandler((_wc, _permission, callback) => {
+    callback(false);
+  });
+  contents.session.setPermissionCheckHandler(() => false);
+
   contents.on('will-navigate', (event, url) => {
     const allowed = isDev ? url.startsWith(DEV_URL) : url.startsWith(`app://${APP_HOST}/`);
     if (allowed) return;
@@ -1400,7 +1407,6 @@ function registerIpc() {
       await shell.openExternal(url);
     }
   });
-
   // Sync IPC (get-config / set-config / test / start / cancel / status) is
   // registered by desktop/services/sync.cjs.
 }function insertPngTextChunk(pngBuffer, keyword, text) {

@@ -31,7 +31,7 @@ function encodePath(relativePath) {
 
 contextBridge.exposeInMainWorld('hoshikuzu', {
   desktop: {
-    version: '1.1.1',
+    version: '1.1.2',
     platform: process.platform,
     library: {
       getConfig: () => invoke('library:get-config'),
