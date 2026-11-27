@@ -13,10 +13,24 @@ const {
   parseFilenameDate,
   readPhotoMetadata,
 } = require('../metadata.cjs');
-const { readPngTextChunks } = require('../png-chunks.cjs');
+const { parseTextChunk, readPngTextChunks } = require('../png-chunks.cjs');
 
 const WORLD_A = 'wrld_12345678-1234-1234-1234-123456789abc';
 const WORLD_B = 'wrld_abcdefab-cdef-abcd-efab-cdefabcdefab';
+
+test('compressed PNG text chunks are bounded against zlib bombs', () => {
+  const huge = Buffer.alloc(8 * 1024 * 1024, 0x41);
+  const compressed = zlib.deflateSync(huge);
+  const bomb = Buffer.concat([Buffer.from('Comment'), Buffer.from([0, 0]), compressed]);
+  assert.equal(parseTextChunk('zTXt', bomb, 1024), null);
+
+  const small = Buffer.concat([
+    Buffer.from('Comment'),
+    Buffer.from([0, 0]),
+    zlib.deflateSync(Buffer.from('hello')),
+  ]);
+  assert.equal(parseTextChunk('zTXt', small, 1024).text, 'hello');
+});
 
 function crc32(buffer) {
   if (typeof zlib.crc32 === 'function') return zlib.crc32(buffer);

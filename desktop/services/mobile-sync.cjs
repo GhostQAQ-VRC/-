@@ -14,6 +14,12 @@ const COOKIE_NAME = 'hoshikuzu_mobile';
 const DEVICE_COOKIE = 'hoshikuzu_mobile_device';
 const SESSION_MAX_AGE = 60 * 60 * 12;
 const RECEIVE_MODES = ['stream', 'save'];
+// Pairing is a 144-bit secret, so the limit only exists to stop log/CPU abuse.
+// It is scoped per IP and only applies to failed attempts: a phone with the
+// correct QR token can always pair, even while someone else floods failures.
+const PAIR_FAILURE_LIMIT = 20;
+const PAIR_FAILURE_WINDOW_MS = 60_000;
+const MAX_SESSION_TOKENS = 256;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -96,6 +102,11 @@ function cookie(name, value, maxAge = SESSION_MAX_AGE) {
 
 function baseName(value) {
   return path.basename(String(value || '').replace(/\\/g, '/'));
+}
+
+function clientIp(req) {
+  const address = req && req.socket ? req.socket.remoteAddress : '';
+  return String(address || 'unknown').replace(/^::ffff:/, '');
 }
 
 function safeFileName(value, fallback = 'memory.jpg') {
@@ -343,8 +354,11 @@ class MobileSyncService {
     this.port = DEFAULT_PORT;
     this.token = '';
     this.sessionTokens = new Set();
-    this.pairFailures = 0;
-    this.pairFailedAt = 0;
+    // Expiry + device mapping stay alongside the token set so a stolen cookie
+    // stops working after SESSION_MAX_AGE and one device can be revoked alone.
+    this.sessionTokenExpiry = new Map();
+    this.sessionTokenDevices = new Map();
+    this.pairFailuresByIp = new Map();
     this.startedAt = null;
     this.sessions = new Map();
     this.blockedDevices = new Set();
@@ -533,7 +547,9 @@ class MobileSyncService {
     this.sessions.clear();
     // Every restart rotates the QR token and invalidates all sessions.
     this.sessionTokens.clear();
-    this.pairFailures = 0;
+    this.sessionTokenExpiry.clear();
+    this.sessionTokenDevices.clear();
+    this.pairFailuresByIp.clear();
     if (!this.server) return { ok: true, status: this.status() };
     const server = this.server;
     this.server = null;
@@ -616,10 +632,19 @@ class MobileSyncService {
 
   async handleRequest(req, res) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
-    const pathname = decodeURIComponent(url.pathname);
+    let pathname;
+    try {
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      this.sendJson(res, 400, { ok: false, error: '请求路径不合法。' });
+      return;
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'DENY');
+    // X-Frame-Options covers legacy WebViews; the CSP header covers the rest.
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -670,11 +695,13 @@ class MobileSyncService {
 
   async handlePair(req, res, token) {
     const supplied = String(token || '').replace(/\/+$/, '');
-    if (!this.server || !tokensEqual(supplied, this.token)) {
-      // Rate-limit repeated bad guesses so a LAN scanner cannot brute force.
-      this.pairFailures = (this.pairFailures || 0) + 1;
-      this.pairFailedAt = Date.now();
-      if (this.pairFailures > 30) {
+    const ip = clientIp(req);
+    // Check the secret before the rate limit: a LAN flood of wrong guesses must
+    // never lock the legitimate phone out of pairing.
+    const valid = Boolean(this.server) && tokensEqual(supplied, this.token);
+    if (!valid) {
+      const limited = this.recordPairFailure(ip);
+      if (limited) {
         res.setHeader('retry-after', '5');
         this.sendHtml(
           res,
@@ -698,15 +725,81 @@ class MobileSyncService {
     const deviceId = crypto.randomBytes(12).toString('base64url');
     // Issue a per-pairing session token. The long-lived QR token is exchanged
     // for it once and never stored on the phone in cookie form.
-    const sessionToken = crypto.randomBytes(24).toString('base64url');
-    this.sessionTokens.add(sessionToken);
-    this.pairFailures = 0;
+    const sessionToken = this.issueSessionToken(deviceId);
+    this.clearPairFailures(ip);
     res.setHeader('Set-Cookie', [
       cookie(COOKIE_NAME, sessionToken),
       cookie(DEVICE_COOKIE, deviceId),
     ]);
     res.writeHead(302, { Location: '/m' });
     res.end();
+  }
+
+  recordPairFailure(ip) {
+    const now = Date.now();
+    const recent = (this.pairFailuresByIp.get(ip) || []).filter(
+      (stamp) => now - stamp < PAIR_FAILURE_WINDOW_MS,
+    );
+    recent.push(now);
+    this.pairFailuresByIp.set(ip, recent);
+    if (this.pairFailuresByIp.size > 1024) {
+      for (const [key, stamps] of this.pairFailuresByIp) {
+        if (!stamps.some((stamp) => now - stamp < PAIR_FAILURE_WINDOW_MS)) {
+          this.pairFailuresByIp.delete(key);
+        }
+      }
+      // Hard cap even when every entry is recent (IPv6 rotation).
+      while (this.pairFailuresByIp.size > 1024) {
+        const oldest = this.pairFailuresByIp.keys().next().value;
+        if (!oldest) break;
+        this.pairFailuresByIp.delete(oldest);
+      }
+    }
+    return recent.length > PAIR_FAILURE_LIMIT;
+  }
+
+  clearPairFailures(ip) {
+    this.pairFailuresByIp.delete(ip);
+  }
+
+  issueSessionToken(deviceId) {
+    const token = crypto.randomBytes(24).toString('base64url');
+    this.sessionTokens.add(token);
+    this.sessionTokenExpiry.set(token, Date.now() + SESSION_MAX_AGE * 1000);
+    this.sessionTokenDevices.set(token, deviceId);
+    this.pruneSessionTokens();
+    return token;
+  }
+
+  pruneSessionTokens(now = Date.now()) {
+    for (const token of this.sessionTokens) {
+      const expiresAt = this.sessionTokenExpiry.get(token);
+      if (!expiresAt || expiresAt <= now) this.revokeSessionToken(token);
+    }
+    while (this.sessionTokens.size > MAX_SESSION_TOKENS) {
+      const oldest = this.sessionTokens.values().next().value;
+      if (!oldest) break;
+      this.revokeSessionToken(oldest);
+    }
+  }
+
+  revokeSessionToken(token) {
+    this.sessionTokens.delete(token);
+    this.sessionTokenExpiry.delete(token);
+    this.sessionTokenDevices.delete(token);
+  }
+
+  /** Revoke only the pairing sessions issued to one phone. */
+  revokeDeviceSessions(deviceId) {
+    if (!deviceId) return 0;
+    let revoked = 0;
+    for (const [token, id] of this.sessionTokenDevices) {
+      if (id === deviceId) {
+        this.revokeSessionToken(token);
+        revoked += 1;
+      }
+    }
+    return revoked;
   }
 
   authToken(req, url) {
@@ -722,17 +815,12 @@ class MobileSyncService {
 
   authorized(req, url) {
     if (!this.token) return false;
+    this.pruneSessionTokens();
     const supplied = this.authToken(req, url);
     if (!supplied) return false;
-    // Session tokens are paired-device cookies; verify by membership without
-    // timing-sensitive comparison against each entry.
-    if (this.sessionTokens.size > 0 && this.sessionTokens.has(supplied)) return true;
-    // The x-mobile-token header path (used by the desktop smoke harness) still
-    // accepts the pairing token itself, compared in constant time.
-    if (req.headers['x-mobile-token'] !== undefined) {
-      return tokensEqual(supplied, this.token);
-    }
-    return false;
+    // Only cookies/headers carrying a paired-device session token authenticate.
+    // The long-lived QR token itself is not an API credential.
+    return this.sessionTokens.has(supplied);
   }
 
   sessionFor(req, res) {
@@ -748,7 +836,7 @@ class MobileSyncService {
         id: deviceId,
         name: deviceLabel(req.headers['user-agent']),
         platform: devicePlatform(req.headers['user-agent']),
-        ip: (req.socket.remoteAddress || '').replace(/^::ffff:/, ''),
+        ip: clientIp(req),
         connectedAt: new Date().toISOString(),
         lastSeen: new Date().toISOString(),
         heartbeatAt: null,
@@ -867,7 +955,7 @@ class MobileSyncService {
       // Leaving also invalidates this device's session token so the cookie
       // cannot be replayed after the phone closes the page.
       const cookieToken = parseCookies(req.headers.cookie)[COOKIE_NAME];
-      if (cookieToken) this.sessionTokens.delete(cookieToken);
+      if (cookieToken) this.revokeSessionToken(cookieToken);
       if (session.res) {
         try {
           session.res.end();
@@ -915,7 +1003,7 @@ class MobileSyncService {
       const previewDir = this.getPreviewDir
         ? await this.getPreviewDir(root)
         : repository.previewDir(root, await repository.readLibrary(root));
-      const absolute = repository.resolveInside(previewDir, photo.previewPath);
+      const absolute = await repository.resolveRealInside(previewDir, photo.previewPath);
       if (!absolute) {
         this.sendJson(res, 403, { ok: false, error: '缩略图路径不合法。' });
         return;

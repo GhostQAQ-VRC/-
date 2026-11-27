@@ -4,7 +4,7 @@ const path = require('node:path');
 const fsp = require('node:fs/promises');
 const sharp = require('sharp');
 const repository = require('../library/repository.cjs');
-const { PREVIEW_FILE_PATTERN } = require('../library/constants.cjs');
+const { MAX_INPUT_PIXELS, PREVIEW_FILE_PATTERN } = require('../library/constants.cjs');
 
 const PROTOCOLS = ['openai', 'anthropic', 'gemini', 'ollama'];
 const WORLD_ID_RE =
@@ -378,7 +378,7 @@ function parseSummary(raw) {
 async function prepareImage(absPath, options = {}) {
   const maxEdge = options.maxEdge ?? 1024;
   const quality = options.quality ?? 82;
-  const buffer = await sharp(absPath, { limitInputPixels: false, failOn: 'none' })
+  const buffer = await sharp(absPath, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'none' })
     .rotate()
     .resize({ width: maxEdge, height: maxEdge, fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality })
@@ -538,7 +538,7 @@ async function resolveImagePath(root, item) {
     return path.join(repository.previewDir(root, wrapper), name);
   }
   if (item.libraryPath) {
-    const absolute = repository.resolveInside(root, item.libraryPath);
+    const absolute = await repository.resolveRealInside(root, item.libraryPath);
     if (!absolute) throw new Error('照片路径不合法。');
     return absolute;
   }
@@ -566,7 +566,7 @@ async function summarizePhoto(options) {
     // A cleared preview cache should not block AI; fall back to the original.
     try {
       if (!item.libraryPath) throw new Error('没有原图路径。');
-      absolute = repository.resolveInside(root, item.libraryPath);
+      absolute = await repository.resolveRealInside(root, item.libraryPath);
       if (!absolute) throw new Error('原图路径不合法。');
       await fsp.access(absolute);
     } catch (error) {
@@ -786,7 +786,7 @@ async function detectOrientation(options) {
   } catch {
     try {
       if (!item.libraryPath) throw new Error('没有原图路径。');
-      absolute = repository.resolveInside(root, item.libraryPath);
+      absolute = await repository.resolveRealInside(root, item.libraryPath);
       if (!absolute) throw new Error('原图路径不合法。');
       await fsp.access(absolute);
     } catch (error) {
@@ -868,7 +868,7 @@ async function recognizeWorldId(options) {
   } catch {
     try {
       if (!item.libraryPath) throw new Error('没有原图路径。');
-      absolute = repository.resolveInside(root, item.libraryPath);
+      absolute = await repository.resolveRealInside(root, item.libraryPath);
       if (!absolute) throw new Error('原图路径不合法。');
       await fsp.access(absolute);
     } catch (error) {

@@ -47,13 +47,15 @@ import com.journeyapps.barcodescanner.ScanOptions;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private static final String PREFS = "hoshikuzu_mobile";
     private static final String KEY_URL = "server_url";
-    private static final String APP_VERSION = "1.1.2";
+    private static final String APP_VERSION = "1.1.3";
     private static final String LOCAL_URL =
             "https://appassets.androidplatform.net/assets/web/mobile-client.html";
     private static final String LOCAL_HOST = "appassets.androidplatform.net";
@@ -176,10 +178,32 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * The bundled pages must never be framed by a paired (or hostile) desktop
+     * page. X-Frame-Options is part of the response because meta CSP ignores
+     * frame-ancestors.
+     */
+    private static WebViewAssetLoader.PathHandler withFrameGuard(
+            WebViewAssetLoader.PathHandler handler) {
+        return path -> {
+            WebResourceResponse response = handler.handle(path);
+            if (response == null) return null;
+            Map<String, String> headers = new HashMap<>();
+            if (response.getResponseHeaders() != null) {
+                headers.putAll(response.getResponseHeaders());
+            }
+            headers.put("X-Content-Type-Options", "nosniff");
+            headers.put("X-Frame-Options", "DENY");
+            response.setResponseHeaders(headers);
+            return response;
+        };
+    }
+
     private void configureWebView() {
         assetLoader = new WebViewAssetLoader.Builder()
-                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
-                .addPathHandler("/media/", new MobileMediaHandler(this))
+                .addPathHandler("/assets/", withFrameGuard(
+                        new WebViewAssetLoader.AssetsPathHandler(this)))
+                .addPathHandler("/media/", withFrameGuard(new MobileMediaHandler(this)))
                 .build();
 
         WebSettings settings = webView.getSettings();
@@ -235,9 +259,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
-            if (url != null && (url.startsWith("http://") || url.startsWith("https://"))) {
-                NativeDownloader.save(this, url, null);
-            }
+            if (url == null) return;
+            boolean http = url.startsWith("http://");
+            boolean https = url.startsWith("https://");
+            if (!http && !https) return;
+            // A paired desktop page may only push downloads from its own
+            // origin; otherwise it could drive-by download arbitrary content
+            // into the phone's Downloads collection.
+            boolean trusted = isLocalUrl(webView.getUrl()) || isSameServer(Uri.parse(url));
+            if (trusted) NativeDownloader.save(this, url, null);
         });
 
         CookieManager cookies = CookieManager.getInstance();
@@ -249,6 +279,8 @@ public class MainActivity extends AppCompatActivity {
         if (url == null) return false;
         try {
             Uri uri = Uri.parse(url);
+            String scheme = uri.getScheme();
+            if (scheme == null || !"https".equalsIgnoreCase(scheme.trim())) return false;
             String path = uri.getPath();
             return LOCAL_HOST.equalsIgnoreCase(uri.getHost())
                     && path != null
@@ -422,12 +454,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean isSameServer(Uri uri) {
-        if (currentUrl == null) return false;
+        if (currentUrl == null || uri == null) return false;
         Uri current = Uri.parse(currentUrl);
         String host = uri.getHost();
         String currentHost = current.getHost();
-        if (host == null || currentHost == null) return false;
-        return host.equalsIgnoreCase(currentHost)
+        String scheme = uri.getScheme();
+        String currentScheme = current.getScheme();
+        if (host == null || currentHost == null || scheme == null || currentScheme == null) {
+            return false;
+        }
+        return scheme.equalsIgnoreCase(currentScheme)
+                && host.equalsIgnoreCase(currentHost)
                 && effectivePort(uri) == effectivePort(current);
     }
 

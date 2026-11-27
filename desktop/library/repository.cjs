@@ -491,6 +491,20 @@ function resolveInside(root, relativePath) {
   return absolute;
 }
 
+/**
+ * Resolve a library-relative path and require the normalized result to stay
+ * inside one top-level directory (`_inbox`, the thumbnail folder, …). Guards
+ * prefix checks against `_inbox/../elsewhere` style escapes.
+ */
+function resolveInsideDir(root, relativePath, dirName) {
+  const absolute = resolveInside(root, relativePath);
+  if (!absolute) return null;
+  const directory = sanitizeThumbnailDir(dirName);
+  if (!directory) return null;
+  const relative = toPosix(path.relative(root, absolute));
+  return relative === directory || relative.startsWith(`${directory}/`) ? absolute : null;
+}
+
 /** Network-facing variant: resolve symlinks before checking the prefix. */
 async function resolveRealInside(root, relativePath) {
   const absolute = resolveInside(root, relativePath);
@@ -532,6 +546,7 @@ module.exports = {
   removeIgnoredHashes,
   resetIgnoredHashes,
   resolveInside,
+  resolveInsideDir,
   resolveRealInside,
   sanitizeThumbnailDir,
   thumbnailDirRelative,

@@ -8,6 +8,7 @@ const sharp = require('sharp');
 const {
   DEFAULT_PREVIEW_MAX_EDGE,
   DEFAULT_PREVIEW_QUALITY,
+  MAX_INPUT_PIXELS,
   PREVIEW_FILE_PATTERN,
   THUMBNAIL_PRESETS,
   resolveThumbnailPreset,
@@ -73,7 +74,7 @@ async function fileExists(target) {
 /** Header-only read: works even for very large originals. */
 async function readImageDimensions(absPath) {
   try {
-    const meta = await sharp(absPath, { limitInputPixels: false, failOn: 'none' }).metadata();
+    const meta = await sharp(absPath, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'none' }).metadata();
     let width = meta.width;
     let height = meta.height;
     if (meta.orientation >= 5 && meta.orientation <= 8 && width && height) {
@@ -88,7 +89,7 @@ async function readImageDimensions(absPath) {
 function sharpInput(absPath) {
   // Read-only pipeline. `failOn: none` keeps slightly damaged VRChat captures
   // visible instead of dropping them, and the original file is never written.
-  return sharp(absPath, { limitInputPixels: false, failOn: 'none' });
+  return sharp(absPath, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'none' });
 }
 
 /**

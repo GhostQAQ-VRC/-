@@ -11,7 +11,7 @@ function decodeText(buffer) {
   return utf8.includes('\uFFFD') ? buffer.toString('latin1') : utf8;
 }
 
-function parseTextChunk(type, data) {
+function parseTextChunk(type, data, maxOutputBytes = 4 * 1024 * 1024) {
   const nullIndex = data.indexOf(0);
   if (nullIndex <= 0) return null;
   const keyword = data.toString('latin1', 0, nullIndex);
@@ -24,7 +24,12 @@ function parseTextChunk(type, data) {
     if (data.length < nullIndex + 3) return null;
     const compressed = data.subarray(nullIndex + 2);
     try {
-      return { keyword, text: decodeText(zlib.inflateSync(compressed)) };
+      // Bound the output as well as the compressed input: a 4 MB chunk can
+      // inflate to gigabytes (zlib bomb) and exhaust the main process.
+      return {
+        keyword,
+        text: decodeText(zlib.inflateSync(compressed, { maxOutputLength: maxOutputBytes })),
+      };
     } catch {
       return null;
     }
@@ -45,7 +50,7 @@ function parseTextChunk(type, data) {
   let textBuffer = data.subarray(cursor);
   if (compressionFlag === 1) {
     try {
-      textBuffer = zlib.inflateSync(textBuffer);
+      textBuffer = zlib.inflateSync(textBuffer, { maxOutputLength: maxOutputBytes });
     } catch {
       return null;
     }
@@ -93,7 +98,7 @@ async function readPngTextChunks(filePath, options = {}) {
       if (TEXT_CHUNK_TYPES.has(type) && length > 0 && length <= maxTextBytes) {
         const data = Buffer.alloc(length);
         await handle.read(data, 0, length, dataStart);
-        const parsed = parseTextChunk(type, data);
+        const parsed = parseTextChunk(type, data, maxTextBytes);
         if (parsed && parsed.keyword) {
           const previous = chunks[parsed.keyword];
           if (!previous || previous.length < parsed.text.length) {

@@ -324,6 +324,158 @@ test('file bytes stay untouched by the mobile service', async () => {
   await fsp.rm(temp, { recursive: true, force: true });
 });
 
+test('pairing failures are rate-limited without locking out the QR token', async () => {
+  const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-mobile-rate-'));
+  const dist = path.join(temp, 'dist');
+  await fsp.mkdir(dist, { recursive: true });
+  await fsp.writeFile(path.join(dist, 'index.html'), '<!doctype html><html><body>phone</body></html>');
+  const service = new MobileSyncService({
+    distDir: dist,
+    getRoot: () => path.join(temp, 'library'),
+    getAlbum: () => makeAlbum(),
+    getPreviewDir: () => path.join(temp, 'previews'),
+    getSettings: () => ({ enabled: true, port: 0, preferredIp: '', receiveMode: 'stream' }),
+    updateSettings: async () => {},
+  });
+  try {
+    assert.equal((await service.start({ port: 0 })).ok, true);
+    const statuses = [];
+    for (let index = 0; index < 22; index += 1) {
+      const response = await request(service, `/m/wrong-token-${index}`);
+      statuses.push(response.status);
+    }
+    assert.equal(statuses[0], 403);
+    assert.equal(statuses[19], 403);
+    assert.equal(statuses[20], 429);
+
+    // The flood must not prevent the real phone from pairing.
+    const pair = await request(service, `/m/${service.token}`);
+    assert.equal(pair.status, 302);
+    const cookies = cookieHeaderFrom(pair);
+    const album = await request(service, '/api/mobile/album', { headers: { Cookie: cookies } });
+    assert.equal(album.status, 200);
+  } finally {
+    await service.stop({ silent: true });
+    await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('the long-lived QR token is not an API credential', async () => {
+  const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-mobile-cred-'));
+  const dist = path.join(temp, 'dist');
+  await fsp.mkdir(dist, { recursive: true });
+  await fsp.writeFile(path.join(dist, 'index.html'), '<!doctype html><html><body>phone</body></html>');
+  const service = new MobileSyncService({
+    distDir: dist,
+    getRoot: () => path.join(temp, 'library'),
+    getAlbum: () => makeAlbum(),
+    getPreviewDir: () => path.join(temp, 'previews'),
+    getSettings: () => ({ enabled: true, port: 0, preferredIp: '', receiveMode: 'stream' }),
+    updateSettings: async () => {},
+  });
+  try {
+    assert.equal((await service.start({ port: 0 })).ok, true);
+
+    const withQrToken = await request(service, '/api/mobile/album', {
+      headers: { 'x-mobile-token': service.token },
+    });
+    assert.equal(withQrToken.status, 401);
+
+    const pair = await request(service, `/m/${service.token}`);
+    const cookies = cookieHeaderFrom(pair);
+    const sessionToken = /hoshikuzu_mobile=([^;]+)/.exec(cookies)?.[1] || '';
+    assert.ok(sessionToken);
+    assert.notEqual(sessionToken, service.token);
+
+    const withSessionHeader = await request(service, '/api/mobile/album', {
+      headers: { 'x-mobile-token': sessionToken },
+    });
+    assert.equal(withSessionHeader.status, 200);
+  } finally {
+    await service.stop({ silent: true });
+    await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('expired session tokens stop authenticating and are pruned', async () => {
+  const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-mobile-exp-'));
+  const dist = path.join(temp, 'dist');
+  await fsp.mkdir(dist, { recursive: true });
+  await fsp.writeFile(path.join(dist, 'index.html'), '<!doctype html><html><body>phone</body></html>');
+  const service = new MobileSyncService({
+    distDir: dist,
+    getRoot: () => path.join(temp, 'library'),
+    getAlbum: () => makeAlbum(),
+    getPreviewDir: () => path.join(temp, 'previews'),
+    getSettings: () => ({ enabled: true, port: 0, preferredIp: '', receiveMode: 'stream' }),
+    updateSettings: async () => {},
+  });
+  try {
+    assert.equal((await service.start({ port: 0 })).ok, true);
+    const pair = await request(service, `/m/${service.token}`);
+    const cookies = cookieHeaderFrom(pair);
+    const sessionToken = /hoshikuzu_mobile=([^;]+)/.exec(cookies)?.[1] || '';
+    assert.ok(sessionToken);
+
+    service.sessionTokenExpiry.set(sessionToken, Date.now() - 1000);
+    const expired = await request(service, '/api/mobile/album', { headers: { Cookie: cookies } });
+    assert.equal(expired.status, 401);
+    assert.equal(service.sessionTokens.has(sessionToken), false);
+  } finally {
+    await service.stop({ silent: true });
+    await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('disconnecting one device leaves other paired phones connected', async () => {
+  const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-mobile-revoke-'));
+  const dist = path.join(temp, 'dist');
+  await fsp.mkdir(dist, { recursive: true });
+  await fsp.writeFile(path.join(dist, 'index.html'), '<!doctype html><html><body>phone</body></html>');
+  const service = new MobileSyncService({
+    distDir: dist,
+    getRoot: () => path.join(temp, 'library'),
+    getAlbum: () => makeAlbum(),
+    getPreviewDir: () => path.join(temp, 'previews'),
+    getSettings: () => ({ enabled: true, port: 0, preferredIp: '', receiveMode: 'stream' }),
+    updateSettings: async () => {},
+  });
+  try {
+    assert.equal((await service.start({ port: 0 })).ok, true);
+    const firstPair = await request(service, `/m/${service.token}`);
+    const secondPair = await request(service, `/m/${service.token}`);
+    const firstCookies = cookieHeaderFrom(firstPair);
+    const secondCookies = cookieHeaderFrom(secondPair);
+    const firstDevice = /hoshikuzu_mobile_device=([^;]+)/.exec(firstCookies)?.[1] || '';
+    const secondDevice = /hoshikuzu_mobile_device=([^;]+)/.exec(secondCookies)?.[1] || '';
+    assert.ok(firstDevice);
+    assert.ok(secondDevice);
+    assert.notEqual(firstDevice, secondDevice);
+
+    assert.equal(
+      (await request(service, '/api/mobile/album', { headers: { Cookie: firstCookies } })).status,
+      200,
+    );
+    assert.equal(
+      (await request(service, '/api/mobile/album', { headers: { Cookie: secondCookies } })).status,
+      200,
+    );
+
+    assert.equal(service.revokeDeviceSessions(secondDevice), 1);
+    assert.equal(
+      (await request(service, '/api/mobile/album', { headers: { Cookie: firstCookies } })).status,
+      200,
+    );
+    assert.equal(
+      (await request(service, '/api/mobile/album', { headers: { Cookie: secondCookies } })).status,
+      401,
+    );
+  } finally {
+    await service.stop({ silent: true });
+    await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
 test('token never authenticates through the URL query string', async () => {
   const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-mobile-tok-'));
   const dist = path.join(temp, 'dist');

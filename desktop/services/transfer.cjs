@@ -220,6 +220,20 @@ class TransferService {
 
   allow(ip) {
     const now = Date.now();
+    // Bound the per-IP map: an IPv6 client can present a fresh address on
+    // every request, so entries must expire instead of accumulating forever.
+    if (this.rate.size > 2048) {
+      for (const [key, stamps] of this.rate) {
+        const recent = stamps.filter((stamp) => now - stamp < 60000);
+        if (recent.length) this.rate.set(key, recent);
+        else this.rate.delete(key);
+      }
+      while (this.rate.size > 2048) {
+        const oldest = this.rate.keys().next().value;
+        if (!oldest) break;
+        this.rate.delete(oldest);
+      }
+    }
     const recent = (this.rate.get(ip) || []).filter((stamp) => now - stamp < 60000);
     if (recent.length >= 120) {
       this.rate.set(ip, recent);

@@ -3,6 +3,7 @@
 const { app } = require('electron');
 const sharp = require('sharp');
 const network = require('./network.cjs');
+const { MAX_INPUT_PIXELS } = require('../library/constants.cjs');
 
 const DEFAULT_API_BASE = 'https://api.vrchat.cloud';
 const WORLD_ID_PATTERN =
@@ -283,7 +284,7 @@ class VRChatService {
       if (!response.ok) return '';
       const buffer = Buffer.from(await response.arrayBuffer());
       if (buffer.length === 0 || buffer.length > 20 * 1024 * 1024) return '';
-      const output = await sharp(buffer, { limitInputPixels: false, failOn: 'none' })
+      const output = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'none' })
         .rotate()
         .resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 72, effort: 4 })

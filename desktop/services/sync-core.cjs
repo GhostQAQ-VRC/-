@@ -913,7 +913,7 @@ async function buildCloudPlan(root, album) {
   for (const photo of photos) {
     if (photo.mediaKind !== 'library' || !photo.libraryPath || photo.missing) continue;
     libraryPhotos += 1;
-    const absolute = repository.resolveInside(root, photo.libraryPath);
+    const absolute = await repository.resolveRealInside(root, photo.libraryPath);
     if (!absolute) {
       skipped += 1;
       continue;

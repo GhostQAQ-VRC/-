@@ -47,7 +47,7 @@ public class SaveBridge {
     @JavascriptInterface
     public String appVersion() {
         MainActivity activity = activityRef.get();
-        return activity == null ? "1.1.2" : activity.appVersion();
+        return activity == null ? "1.1.3" : activity.appVersion();
     }
 
     @JavascriptInterface

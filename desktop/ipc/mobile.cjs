@@ -152,11 +152,9 @@ function createMobileService(options) {
     const session = service.sessions.get(id);
     if (session) {
       service.blockedDevices.add(id);
-      // Revoke the pairing session issued for this device.
-      for (const token of service.sessionTokens) {
-        // Session tokens are unguessable random values; direct membership check.
-        service.sessionTokens.delete(token);
-      }
+      // Revoke only the pairing sessions issued to this device. Other phones
+      // stay connected.
+      service.revokeDeviceSessions(id);
       try {
         session.res?.end();
       } catch {

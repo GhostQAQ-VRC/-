@@ -51,11 +51,25 @@ if (isSmoke && process.env.HOSHIKUZU_SMOKE_DIR) {
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'app',
-    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      // Electron >= 39.8.10 requires this for cross-origin fetch; without it
+      // a protocol with supportFetchAPI was readable from any origin.
+      corsEnabled: true,
+    },
   },
   {
     scheme: 'hoshikuzu-media',
-    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      corsEnabled: true,
+    },
   },
 ]);
 
@@ -282,6 +296,26 @@ async function serveFile(request, absolutePath, options = {}) {
       ? 'public, max-age=31536000, immutable'
       : 'no-cache',
   };
+  if (options.contentSecurityPolicy) {
+    headers['content-security-policy'] = options.contentSecurityPolicy;
+  }
+  // The custom schemes are CORS-enabled (Electron's hardened default). The
+  // renderer fetches thumbnails/backgrounds via hoshikuzu-media://, so echo
+  // only the app origin (and the dev server while developing) instead of
+  // opening the protocol to every origin.
+  const origin = request.headers.get('origin');
+  let allowedOrigin = origin === `app://${APP_HOST}`;
+  if (!allowedOrigin && isDev && DEV_URL) {
+    try {
+      allowedOrigin = origin === new URL(DEV_URL).origin;
+    } catch {
+      allowedOrigin = false;
+    }
+  }
+  if (allowedOrigin) {
+    headers['access-control-allow-origin'] = origin;
+    headers.vary = 'Origin';
+  }
 
   if (request.method === 'HEAD') {
     return new Response(null, {
@@ -324,7 +358,12 @@ function registerProtocols() {
     if (url.host && url.host !== APP_HOST) {
       return new Response('Not found', { status: 404 });
     }
-    let relative = decodeURIComponent(url.pathname).replace(/^\/+/, '');
+    let relative;
+    try {
+      relative = decodeURIComponent(url.pathname).replace(/^\/+/, '');
+    } catch {
+      return new Response('Bad request', { status: 400 });
+    }
     if (!relative) relative = 'index.html';
 
     const absolute = path.resolve(DIST_DIR, relative);
@@ -335,11 +374,18 @@ function registerProtocols() {
 
     if (fs.existsSync(absolute) && fs.statSync(absolute).isFile()) {
       // Vite hashes every asset name, so those bytes never change.
-      return serveFile(request, absolute, { immutable: relative.startsWith('assets/') });
+      return serveFile(request, absolute, {
+        immutable: relative.startsWith('assets/'),
+        contentSecurityPolicy: mimeFor(absolute).startsWith('text/html')
+          ? "frame-ancestors 'none'"
+          : undefined,
+      });
     }
     // Hash routing needs no fallback, but a direct asset miss should not break
     // the app shell either.
-    return serveFile(request, path.join(DIST_DIR, 'index.html'));
+    return serveFile(request, path.join(DIST_DIR, 'index.html'), {
+      contentSecurityPolicy: "frame-ancestors 'none'",
+    });
   });
 
   protocol.handle('hoshikuzu-media', async (request) => {
@@ -348,7 +394,12 @@ function registerProtocols() {
 
     const url = new URL(request.url);
     const kind = url.host;
-    const relative = decodeURIComponent(url.pathname).replace(/^\/+/, '');
+    let relative;
+    try {
+      relative = decodeURIComponent(url.pathname).replace(/^\/+/, '');
+    } catch {
+      return new Response('Bad request', { status: 400 });
+    }
 
     if (kind === 'preview') {
       const name = path.basename(relative);
@@ -384,7 +435,9 @@ function registerProtocols() {
     }
 
     if (kind === 'original') {
-      const absolute = repository.resolveInside(root, relative);
+      // Resolve symlinks too: a link planted inside the library must not make
+      // the renderer read a file outside the library root.
+      const absolute = await repository.resolveRealInside(root, relative);
       if (!absolute) return new Response('Forbidden', { status: 403 });
       return serveFile(request, absolute);
     }
@@ -517,7 +570,20 @@ async function createWindow() {
   contents.session.setPermissionCheckHandler(() => false);
 
   contents.on('will-navigate', (event, url) => {
-    const allowed = isDev ? url.startsWith(DEV_URL) : url.startsWith(`app://${APP_HOST}/`);
+    let allowed = false;
+    if (isDev) {
+      // Compare origins, not a string prefix: `http://127.0.0.1:5173.evil`
+      // must not inherit the dev-server allowance.
+      try {
+        const target = new URL(url);
+        const dev = new URL(DEV_URL);
+        allowed = target.origin === dev.origin && target.pathname.startsWith(dev.pathname);
+      } catch {
+        allowed = false;
+      }
+    } else {
+      allowed = url.startsWith(`app://${APP_HOST}/`);
+    }
     if (allowed) return;
     event.preventDefault();
     if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
@@ -1022,7 +1088,7 @@ function registerIpc() {
   ipcMain.handle('library:reveal-file', async (_event, relativePath) => {
     const root = getAvailableRoot();
     if (!root) return { ok: false, error: '存储库不可用。' };
-    const absolute = repository.resolveInside(root, relativePath);
+    const absolute = await repository.resolveRealInside(root, relativePath);
     if (!absolute) return { ok: false, error: '文件路径不合法。' };
     shell.showItemInFolder(absolute);
     return { ok: true };
@@ -1177,11 +1243,11 @@ function registerIpc() {
     if (!photo || photo.managedCopy !== true) {
       return { ok: false, error: '这张照片不是客户端复制的文件，不能删除原图。' };
     }
-    if (!photo.libraryPath || !String(photo.libraryPath).startsWith(`${constants.INBOX_DIR}/`)) {
-      return { ok: false, error: '只允许删除客户端导入目录中的副本。' };
-    }
-    const absolute = repository.resolveInside(root, photo.libraryPath);
-    if (!absolute) return { ok: false, error: '文件路径不合法。' };
+    // Resolve first, then compare the normalized library-relative path. A raw
+    // prefix check would accept `_inbox/../other.jpg` and delete outside the
+    // managed import folder.
+    const absolute = repository.resolveInsideDir(root, photo.libraryPath, constants.INBOX_DIR);
+    if (!absolute) return { ok: false, error: '只允许删除客户端导入目录中的副本。' };
     try {
       await fsp.rm(absolute, { force: true });
       return { ok: true };
@@ -2311,7 +2377,21 @@ async function runSmokeTest(win) {
   });
   const mobileShot = async (name) => {
     await delay(500);
-    const image = await mobileWin.webContents.capturePage();
+    // The secondary window can hit a transient "UnknownVizError" while the GPU
+    // compositor settles; retry like the main screenshot helper.
+    let image = null;
+    let lastError = null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        image = await mobileWin.webContents.capturePage();
+        break;
+      } catch (error) {
+        lastError = error;
+        await delay(350);
+        if (!mobileWin.isDestroyed()) mobileWin.webContents.invalidate();
+      }
+    }
+    if (!image) throw lastError || new Error('mobile screenshot capture failed');
     await fsp.writeFile(path.join(outDir, name), image.toPNG());
     console.log(`[desktop:smoke] wrote ${name}`);
   };

@@ -46,6 +46,13 @@ const PREVIEW_MAX_EDGES = THUMBNAIL_PRESETS.map((preset) => preset.maxEdge);
 const PREVIEW_QUALITY = DEFAULT_PREVIEW_QUALITY;
 
 /**
+ * Upper bound for decoded image pixels. sharp's own default is 0x3FFF^2
+ * (~268 MP); keeping it explicit means every sharp entry point gets the same
+ * decompression-bomb guard, even ones that used to opt out for huge captures.
+ */
+const MAX_INPUT_PIXELS = 0x3fff * 0x3fff;
+
+/**
  * Canonical preview names include the preset signature so changing quality or
  * resolution can never serve a stale cached file. Legacy `<hash>.webp` names
  * from older libraries are still recognized and served.
