@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
   Cloud,
+  Compass,
   Globe2,
   History,
   Images,
@@ -12,6 +13,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Smartphone,
+  Users,
   X,
 } from 'lucide-react';
 import { BrandGlyph } from '../components/BrandGlyph';
@@ -34,6 +36,8 @@ const NAV_ITEMS = [
   { path: '/admin', label: '概览', en: 'OVERVIEW', icon: LayoutDashboard },
   { path: '/admin/photos', label: '照片管理', en: 'PHOTOS', icon: Images },
   { path: '/admin/worlds', label: '世界资料库', en: 'WORLDS', icon: Globe2 },
+  { path: '/admin/journey', label: '世界旅程', en: 'JOURNEY', icon: Compass },
+  { path: '/admin/players', label: '玩家列表', en: 'PLAYERS', icon: Users },
   { path: '/admin/settings', label: '站点设置', en: 'SETTINGS', icon: Settings2 },
   { path: '/admin/sync', label: '云同步', en: 'CLOUD SYNC', icon: Cloud },
   { path: '/admin/mobile', label: '手机同步', en: 'MOBILE LINK', icon: Smartphone },

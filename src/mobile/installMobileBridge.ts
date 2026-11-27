@@ -7,8 +7,11 @@ import type {
   DesktopBridge,
   DesktopImportResult,
 } from '../platform/desktopApi';
+import type { AlbumData, PhotoDraft } from '../types';
+import { exportAlbumBackup } from '../services/albumStorage';
 import { mediaUrl } from '../platform/media';
 import type { HoshikuzuAndroidBridge } from './native';
+import { callNativeAction } from './managedActions';
 import {
   detectOrientation,
   listModels as listAiModels,
@@ -61,6 +64,27 @@ const SYNC_KEY = 'hoshikuzu-mobile-sync-v1';
 let cloudSyncRunning: 'cloud' | 'website' | null = null;
 
 const noopUnsub = () => () => {};
+
+function backupStamp(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(
+    now.getHours(),
+  )}${pad(now.getMinutes())}`;
+}
+
+/** Wrapped backup JSON for the app-private mobile album (or null when empty). */
+function mobileAlbumBackupJson(): string | null {
+  try {
+    const raw = localStorage.getItem(ALBUM_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as AlbumData;
+    if (!data || !Array.isArray(data.photos)) return null;
+    return exportAlbumBackup(data);
+  } catch {
+    return null;
+  }
+}
 
 function native(): AndroidNative | null {
   if (typeof window === 'undefined' || !window.HoshikuzuAndroid) return null;
@@ -307,8 +331,63 @@ export function installMobileBridge(): void {
     });
   };
 
+  /**
+   * Pull images shared from another Android app. The native side returns the
+   * same draft shape as the picker, so previews and album insertion reuse the
+   * existing pipeline. Drafts are also queued for React's first mount, since a
+   * share can launch the app before the listener is registered.
+   */
+  const consumeSharedMedia = (): Promise<void> => {
+    if (typeof android.consumeSharedMedia !== 'function') return Promise.resolve();
+    const callbackId = `share_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const config = libraryConfig();
+    return new Promise((resolve) => {
+      pickWaiters.set(callbackId, {
+        resolve: (result) => {
+          let drafts = (Array.isArray(result.drafts) ? result.drafts : []) as unknown as PhotoDraft[];
+          try {
+            const existing = new Set(
+              albumPhotos()
+                .map((photo) => (photo as { contentHash?: string }).contentHash)
+                .filter((hash): hash is string => Boolean(hash)),
+            );
+            drafts = drafts.filter(
+              (draft) => !draft.contentHash || !existing.has(draft.contentHash),
+            );
+          } catch {
+            // Keep the drafts when the local album cannot be read.
+          }
+          if (drafts.length > 0) {
+            window.__hoshikuzuSharedDrafts = [
+              ...(window.__hoshikuzuSharedDrafts || []),
+              ...drafts,
+            ];
+            window.dispatchEvent(
+              new CustomEvent('hoshikuzu:shared-media', { detail: drafts }),
+            );
+          }
+          resolve();
+        },
+        reject: () => resolve(),
+      });
+      try {
+        android.consumeSharedMedia!(
+          callbackId,
+          config.previewMaxEdge,
+          config.previewQuality,
+        );
+      } catch {
+        pickWaiters.delete(callbackId);
+        resolve();
+      }
+    });
+  };
+  window.__hoshikuzuRequestSharedMedia = () => {
+    void consumeSharedMedia();
+  };
+
   const bridge: any = {
-    version: '1.1.3-mobile',
+    version: '1.5.0-mobile',
     platform: 'android',
     album: {
       loadSync: () => ({
@@ -389,6 +468,7 @@ export function installMobileBridge(): void {
       onPreviewReady: noopUnsub,
       onPreviewProgress: noopUnsub,
       onLibraryChanged: noopUnsub,
+      onImported: noopUnsub,
     },
     media: {
       getPathForFile: () => '',
@@ -417,21 +497,29 @@ export function installMobileBridge(): void {
       deleteVideo: async () => ({ ok: true }),
     },
     backup: {
-      exportMetadata: async () => ({
-        ok: false,
-        canceled: true,
-        error: '手机端备份导出正在接入。',
-      }),
-      exportFull: async () => ({
-        ok: false,
-        canceled: true,
-        error: '手机端整库备份正在接入。',
-      }),
-      importFile: async () => ({
-        ok: false,
-        canceled: true,
-        error: '手机端备份导入正在接入。',
-      }),
+      exportMetadata: async () => {
+        const json = mobileAlbumBackupJson();
+        if (!json) {
+          return { ok: false, canceled: false, error: '手机本地相册为空，无法导出。' };
+        }
+        return callNativeAction(
+          'exportText',
+          [`hoshikuzu-album-${backupStamp()}.json`, json],
+          120_000,
+        );
+      },
+      exportFull: async () => {
+        const json = mobileAlbumBackupJson();
+        if (!json) {
+          return { ok: false, canceled: false, error: '手机本地相册为空，无法导出。' };
+        }
+        return callNativeAction(
+          'exportZip',
+          [`hoshikuzu-library-${backupStamp()}.zip`, json],
+          300_000,
+        );
+      },
+      importFile: async () => callNativeAction('importBackup', [], 300_000),
     },
     network: {
       getConfig: async () => ({
@@ -528,6 +616,11 @@ export function installMobileBridge(): void {
       openExternal: async (url: string) => {
         android.openExternal(url);
       },
+      getPreferences: async () => ({ closeToTray: false, launchAtLogin: false }),
+      setPreferences: async () => ({
+        ok: false,
+        preferences: { closeToTray: false, launchAtLogin: false },
+      }),
       onCommand: noopUnsub,
     },
     sync: {
@@ -1147,9 +1240,78 @@ export function installMobileBridge(): void {
       onStatus: noopUnsub,
       onCast: noopUnsub,
     },
+    autoImport: {
+      getConfig: async () => ({
+        enabled: false,
+        folder: '',
+        lastScanAt: null,
+        status: {
+          enabled: false,
+          folder: '',
+          running: false,
+          scanning: false,
+          watched: false,
+          startedAt: null,
+          lastScanAt: null,
+          lastImportedAt: null,
+          importedCount: 0,
+          lastError: null,
+        },
+      }),
+      setConfig: async () => ({
+        ok: false,
+        error: '手机端不支持监视文件夹。',
+        config: await bridge.autoImport.getConfig(),
+      }),
+      chooseFolder: async () => ({
+        ok: false,
+        canceled: true,
+        config: await bridge.autoImport.getConfig(),
+      }),
+      scanNow: async () => ({
+        ok: false,
+        error: '手机端不支持监视文件夹。',
+        config: await bridge.autoImport.getConfig(),
+      }),
+      status: async () => bridge.autoImport.getConfig(),
+      onStatus: noopUnsub,
+    },
+    duplicates: {
+      scan: async () => ({
+        ok: false,
+        error: '手机端不支持重复照片扫描。',
+        groups: [],
+        scanned: 0,
+      }),
+      cancel: async () => ({ ok: true }),
+      trash: async () => ({
+        ok: false,
+        error: '手机端不支持回收站。',
+        trashed: [],
+        errors: [],
+      }),
+      onProgress: noopUnsub,
+    },
+    health: {
+      scan: async () => ({
+        ok: false,
+        error: '手机端不支持库健康检查。',
+        counts: {},
+        issues: [],
+      }),
+      cleanPreviews: async () => ({ ok: false, removed: 0, bytes: 0 }),
+      emptyTrash: async () => ({ ok: false, removed: 0, bytes: 0 }),
+    },
+    wallpaper: {
+      set: async () => ({ ok: false, error: '手机端不支持设置 Windows 壁纸。' }),
+    },
   };
 
   (window as Window & { hoshikuzu?: { desktop?: DesktopBridge } }).hoshikuzu = {
     desktop: bridge as unknown as DesktopBridge,
   };
+
+  // A share intent can have launched the app; consume it once the bridge and
+  // pick-result callback exist. The event/queue is picked up by React's mount.
+  void consumeSharedMedia();
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowUpRight,
+  Check,
   Globe2,
   ImageOff,
   Pencil,
@@ -10,6 +11,7 @@ import {
   RotateCcw,
   Smartphone,
   Sparkles,
+  Star,
   Trash2,
 } from 'lucide-react';
 import type { Photo } from '../types';
@@ -31,6 +33,11 @@ interface PhotoCardProps {
   onRotate: () => void;
   onOpen: () => void;
   onDelete: () => void;
+  onToggleFavorite?: () => void;
+  /** Android local album: tapping the card toggles selection instead of opening. */
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 export function PhotoCard({
@@ -41,6 +48,10 @@ export function PhotoCard({
   onRotate,
   onOpen,
   onDelete,
+  onToggleFavorite,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
 }: PhotoCardProps) {
   const pending = !photo.world && Boolean(photo.worldId);
   const imageSrc = photo.missing ? null : photoSrc(photo) || null;
@@ -48,7 +59,7 @@ export function PhotoCard({
   const orientation = photoOrientation(photo);
   const rotation = photoRotation(photo);
   const mobileCast = useMobileCast();
-  const canCast = mobileCast.running;
+  const canCast = mobileCast.running && !selectionMode;
   const [castPhase, setCastPhase] = useState<'idle' | 'armed' | 'drag'>('idle');
   const [castDistance, setCastDistance] = useState(0);
   const articleRef = useRef<HTMLElement | null>(null);
@@ -272,7 +283,9 @@ export function PhotoCard({
       ref={articleRef}
       className={`photo-card photo-card--${orientation} photo-card--rotate-${rotation}${
         pinned ? ' is-pinned' : ''
-      }${castPhase !== 'idle' ? ' is-casting' : ''}`}
+      }${castPhase !== 'idle' ? ' is-casting' : ''}${
+        selectionMode ? ' is-selecting' : ''
+      }${selected ? ' is-selected' : ''}`}
       data-orientation={orientation}
       data-rotation={rotation}
       data-photo-id={photo.id}
@@ -289,11 +302,19 @@ export function PhotoCard({
             suppressClick.current = false;
             return;
           }
+          if (selectionMode) {
+            onToggleSelect?.();
+            return;
+          }
           onOpen();
         }}
-        aria-label={`打开 ${formatDateShort(photo.capturedAt)} ${formatTime(photo.capturedAt)} 的记忆：${
-          photo.note || photo.alt
-        }`}
+        aria-label={
+          selectionMode
+            ? `${selected ? '取消选择' : '选择'} ${formatDateShort(photo.capturedAt)} 的记忆`
+            : `打开 ${formatDateShort(photo.capturedAt)} ${formatTime(photo.capturedAt)} 的记忆：${
+                photo.note || photo.alt
+              }`
+        }
       />
       <div className="photo-card__media" ref={gate.ref}>
         <SafeImage
@@ -328,12 +349,24 @@ export function PhotoCard({
             置顶
           </span>
         ) : null}
+        {photo.favorite ? (
+          <span className="photo-card__favorite-flag">
+            <Star size={9} strokeWidth={2} aria-hidden="true" />
+            收藏
+          </span>
+        ) : null}
         {canCast ? (
           <span className="photo-card__cast-cue" aria-hidden="true">
             <Smartphone size={11} strokeWidth={1.8} />
             长按上滑投送
           </span>
         ) : null}
+        {selectionMode ? (
+          <span className={`photo-card__select${selected ? ' is-on' : ''}`} aria-hidden="true">
+            {selected ? <Check size={14} strokeWidth={2.6} /> : null}
+          </span>
+        ) : null}
+        {!selectionMode ? (
         <div className="photo-card__actions">
           {canCast ? (
             <button
@@ -347,6 +380,21 @@ export function PhotoCard({
               title="投送到手机"
             >
               <Smartphone size={14} strokeWidth={1.8} />
+            </button>
+          ) : null}
+          {onToggleFavorite ? (
+            <button
+              type="button"
+              className={`photo-card__action${photo.favorite ? ' is-active' : ''}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleFavorite();
+              }}
+              aria-label={photo.favorite ? '取消收藏' : '收藏这张照片'}
+              aria-pressed={photo.favorite === true}
+              title={photo.favorite ? '取消收藏' : '收藏'}
+            >
+              <Star size={14} strokeWidth={1.8} />
             </button>
           ) : null}
           <button
@@ -403,6 +451,7 @@ export function PhotoCard({
             <Trash2 size={14} strokeWidth={1.8} />
           </button>
         </div>
+        ) : null}
       </div>
 
       <div className="photo-card__body">

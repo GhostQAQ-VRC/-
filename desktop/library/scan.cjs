@@ -147,7 +147,8 @@ async function scanLibrary(options) {
           cached.hash &&
           cached.size === stat.size &&
           Math.floor(cached.mtimeMs) === Math.floor(stat.mtimeMs) &&
-          cached.capturedAt
+          cached.capturedAt &&
+          Array.isArray(cached.players)
         ) {
           entry = cached;
         } else {
@@ -165,6 +166,7 @@ async function scanLibrary(options) {
             worldId: metadata.worldId,
             worldName: metadata.worldName,
             worldInstanceId: metadata.worldInstanceId,
+            players: metadata.players || [],
             alt: metadata.alt,
             width: dimensions.width,
             height: dimensions.height,
@@ -209,6 +211,7 @@ async function scanLibrary(options) {
           worldId: entry.worldId,
           worldName: entry.worldName,
           worldInstanceId: entry.worldInstanceId,
+          players: Array.isArray(entry.players) && entry.players.length ? entry.players : undefined,
         });
 
         if (entry.worldId) withWorldId += 1;

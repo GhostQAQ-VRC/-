@@ -8,6 +8,8 @@ import {
   ScanText,
   Sparkles,
   Trash2,
+  UserPlus,
+  Users,
   X,
 } from 'lucide-react';
 import type { AlbumApi } from '../hooks/useAlbum';
@@ -15,10 +17,13 @@ import type { Photo, PhotoMetaSource } from '../types';
 import { effectiveWorldApiBase } from '../data/settings';
 import { getDesktopBridge } from '../platform';
 import { useToast } from '../hooks/useToast';
+import { usePlayerLibrary } from '../hooks/usePlayerLibrary';
 import { toDateTimeLocalValue } from '../utils/date';
 import { Modal } from '../components/Modal';
 import { SafeImage } from '../components/SafeImage';
+import { PlayerAvatar } from '../components/PlayerAvatar';
 import { WorldPanel } from '../components/WorldPanel';
+import { PlayerPickerDialog } from './PlayerPickerDialog';
 
 interface AdminPhotoEditorProps {
   photoId: string | null;
@@ -61,11 +66,14 @@ export function AdminPhotoEditor({
   onNavigateWorlds,
 }: AdminPhotoEditorProps) {
   const { pushToast } = useToast();
+  const playerLibrary = usePlayerLibrary();
   const photo = photoId ? album.photos.find((item) => item.id === photoId) : undefined;
   const [draft, setDraft] = useState<Photo | null>(photo ?? null);
   const [dateValue, setDateValue] = useState('');
   const [note, setNote] = useState('');
   const [alt, setAlt] = useState('');
+  const [playerIds, setPlayerIds] = useState<string[]>(photo?.playerIds ?? []);
+  const [playerPickerOpen, setPlayerPickerOpen] = useState(false);
   const [error, setError] = useState('');
   const [guard, setGuard] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -78,6 +86,8 @@ export function AdminPhotoEditor({
     setDateValue(toDateTimeLocalValue(photo.capturedAt));
     setNote(photo.note);
     setAlt(photo.alt);
+    setPlayerIds(photo.playerIds ?? []);
+    setPlayerPickerOpen(false);
     setError('');
     setGuard(false);
     setConfirmingDelete(false);
@@ -89,9 +99,10 @@ export function AdminPhotoEditor({
       note !== photo.note ||
       alt !== photo.alt ||
       dateValue !== toDateTimeLocalValue(photo.capturedAt) ||
+      playerIds.join(',') !== (photo.playerIds ?? []).join(',') ||
       worldSignature(draft) !== worldSignature(photo)
     );
-  }, [photo, draft, note, alt, dateValue]);
+  }, [photo, draft, note, alt, dateValue, playerIds]);
 
   const requestClose = () => {
     if (dirty) {
@@ -113,6 +124,7 @@ export function AdminPhotoEditor({
       capturedAt: parsed.toISOString(),
       note: note.trim(),
       alt: alt.trim() || `VRChat 记忆照片：${photo.capturedAt.slice(0, 10)}`,
+      playerIds,
     };
     if (worldSignature(draft) !== worldSignature(photo)) {
       patch.world = draft.world ?? null;
@@ -264,7 +276,13 @@ export function AdminPhotoEditor({
   return (
     <Modal
       open
-      onClose={requestClose}
+      onClose={() => {
+        if (playerPickerOpen) {
+          setPlayerPickerOpen(false);
+          return;
+        }
+        requestClose();
+      }}
       labelledBy="admin-photo-title"
       className="admin-modal admin-photo-editor"
     >
@@ -496,6 +514,59 @@ export function AdminPhotoEditor({
                 />
               </div>
             </div>
+
+            <div className="field admin-photo-players">
+              <div className="field-label-row">
+                <span className="field-label">
+                  <Users size={13} aria-hidden="true" />
+                  合照玩家
+                </span>
+                <span className="char-count">{playerIds.length}/32</span>
+              </div>
+              {playerIds.length || playerLibrary.available ? (
+                <div className="player-tag-list">
+                  {playerIds.map((id) => {
+                    const player = playerLibrary.players.find((item) => item.id === id);
+                    return (
+                      <button
+                        type="button"
+                        key={id}
+                        className="player-chip"
+                        title={player ? `${player.displayName} · ${id}` : id}
+                        onClick={() =>
+                          setPlayerIds((previous) => previous.filter((item) => item !== id))
+                        }
+                      >
+                        <PlayerAvatar
+                          name={player?.displayName || id}
+                          src={player?.avatarUrl}
+                          size={22}
+                        />
+                        <span>{player?.displayName || id}</span>
+                        <X size={11} aria-hidden="true" />
+                      </button>
+                    );
+                  })}
+                  {playerLibrary.available ? (
+                    <button
+                      type="button"
+                      className="player-tag-add"
+                      onClick={() => setPlayerPickerOpen(true)}
+                    >
+                      <UserPlus size={13} aria-hidden="true" />
+                      选择玩家
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="field-hint">玩家列表仅在桌面客户端可用。</p>
+              )}
+              {playerLibrary.available ? (
+                <p className="field-hint">
+                  好友登录后自动同步；陌生人可按 VRChat ID 添加，头像会保存为快照。
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <WorldPanel
@@ -505,6 +576,16 @@ export function AdminPhotoEditor({
             apiBase={effectiveWorldApiBase(album.settings)}
             onOpenAdmin={onNavigateWorlds}
             deferCommit
+          />
+
+          <PlayerPickerDialog
+            open={playerPickerOpen}
+            selectedIds={playerIds}
+            onClose={() => setPlayerPickerOpen(false)}
+            onApply={(ids) => {
+              setPlayerIds(ids);
+              setPlayerPickerOpen(false);
+            }}
           />
 
           {error ? (

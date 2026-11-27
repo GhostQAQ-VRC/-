@@ -1,5 +1,7 @@
 package com.hoshikuzu.mobile;
 
+import android.app.Activity;
+import android.app.KeyguardManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -8,6 +10,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -44,6 +47,10 @@ import androidx.webkit.WebViewAssetLoader;
 import com.journeyapps.barcodescanner.ScanContract;
 import com.journeyapps.barcodescanner.ScanOptions;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -55,7 +62,8 @@ import java.util.Map;
 public class MainActivity extends AppCompatActivity {
     private static final String PREFS = "hoshikuzu_mobile";
     private static final String KEY_URL = "server_url";
-    private static final String APP_VERSION = "1.1.3";
+    private static final String KEY_PAIRS = "paired_desktops";
+    private static final String APP_VERSION = "1.5.0";
     private static final String LOCAL_URL =
             "https://appassets.androidplatform.net/assets/web/mobile-client.html";
     private static final String LOCAL_HOST = "appassets.androidplatform.net";
@@ -63,6 +71,11 @@ public class MainActivity extends AppCompatActivity {
     private static final int MODE_REMOTE = 1;
     private static final int REQUEST_FILE_CHOOSER = 4103;
     private static final int REQUEST_PICK_MEDIA = 4104;
+    private static final int REQUEST_NOTIFICATIONS = 4105;
+    private static final int REQUEST_BACKUP_EXPORT = 4106;
+    private static final int REQUEST_BACKUP_IMPORT = 4107;
+    private static final int REQUEST_UNLOCK = 4108;
+    private static final long RELOCK_AFTER_MS = 10_000;
 
     private WebView webView;
     private ScrollView setupScroll;
@@ -86,6 +99,20 @@ public class MainActivity extends AppCompatActivity {
     private String pendingSaveName;
     private String pendingSaveUrl;
     private boolean backPending;
+    private volatile boolean backupBusy;
+    private String pendingBackupCallbackId;
+    private File pendingBackupFile;
+    private final List<Uri> pendingSharedUris = new ArrayList<>();
+    private View lockLayer;
+    private View unlockButton;
+    private LinearLayout discoveredSection;
+    private LinearLayout discoveredList;
+    private TextView discoveredStatus;
+    private DiscoveryClient discoveryClient;
+    private boolean unlocked = true;
+    private boolean unlockInFlight = false;
+    private boolean skipRelockOnce = false;
+    private long pausedAt = 0;
 
     private final ActivityResultLauncher<ScanOptions> scanLauncher =
             registerForActivityResult(new ScanContract(), result -> {
@@ -106,14 +133,161 @@ public class MainActivity extends AppCompatActivity {
         loadingText = findViewById(R.id.loading_text);
         statusText = findViewById(R.id.status_text);
         urlInput = findViewById(R.id.url_input);
+        lockLayer = findViewById(R.id.lock_layer);
+        unlockButton = findViewById(R.id.unlock_button);
+        discoveredSection = findViewById(R.id.discovered_section);
+        discoveredList = findViewById(R.id.discovered_list);
+        discoveredStatus = findViewById(R.id.discovered_status);
+        if (unlockButton != null) {
+            unlockButton.setOnClickListener(v -> requestUnlock());
+        }
 
         secureStore = new SecureStore(this);
         configureWebView();
         bindActions();
+        CastNotifier.ensureChannel(this);
+        requestNotificationPermission();
+        unlocked = !deviceHasLock();
 
         // The app always starts in the standalone local album. Desktop sync is
         // an optional action opened from the local page, never a launch gate.
+        captureSharedIntent(getIntent());
         loadLocal(false);
+    }
+
+    private boolean deviceHasLock() {
+        KeyguardManager manager = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+        return manager != null && manager.isDeviceSecure();
+    }
+
+    private void showLock(boolean visible) {
+        if (lockLayer != null) {
+            lockLayer.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        if (visible) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            if (unlockButton != null) unlockButton.requestFocus();
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
+    }
+
+    private void requestUnlock() {
+        if (unlockInFlight) return;
+        if (!deviceHasLock()) {
+            unlocked = true;
+            showLock(false);
+            return;
+        }
+        KeyguardManager manager = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+        Intent intent = manager == null ? null : manager.createConfirmDeviceCredentialIntent(
+                getString(R.string.lock_title), getString(R.string.lock_hint));
+        if (intent == null) {
+            Toast.makeText(this, R.string.lock_no_device, Toast.LENGTH_LONG).show();
+            return;
+        }
+        unlockInFlight = true;
+        try {
+            startActivityForResult(intent, REQUEST_UNLOCK);
+        } catch (Exception error) {
+            unlockInFlight = false;
+            Toast.makeText(this, "无法打开设备解锁界面", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        captureSharedIntent(intent);
+        handlePendingShares();
+    }
+
+    /** Collect image URIs from ACTION_SEND / ACTION_SEND_MULTIPLE. */
+    private void captureSharedIntent(Intent intent) {
+        if (intent == null) return;
+        String action = intent.getAction();
+        if (!Intent.ACTION_SEND.equals(action)
+                && !Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            return;
+        }
+        ArrayList<Uri> uris = new ArrayList<>();
+        if (Intent.ACTION_SEND.equals(action)) {
+            Uri stream = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (stream != null) uris.add(stream);
+        } else {
+            ArrayList<Uri> streams =
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if (streams != null) uris.addAll(streams);
+        }
+        ClipData clip = intent.getClipData();
+        if (uris.isEmpty() && clip != null) {
+            for (int index = 0; index < clip.getItemCount(); index += 1) {
+                Uri uri = clip.getItemAt(index).getUri();
+                if (uri != null) uris.add(uri);
+            }
+        }
+        if (uris.isEmpty()) return;
+        pendingSharedUris.clear();
+        pendingSharedUris.addAll(uris);
+        // Consumed once; a configuration change must not re-import the same URIs.
+        intent.setAction(null);
+    }
+
+    /** Ask the local page to pull any pending shared images. */
+    private void handlePendingShares() {
+        if (pendingSharedUris.isEmpty()) return;
+        if (mode == MODE_REMOTE) {
+            returnToLocal();
+            return;
+        }
+        if (!pageReady || webView == null || !isOnLocalOrigin()) return;
+        try {
+            webView.evaluateJavascript(
+                    "window.__hoshikuzuRequestSharedMedia&&window.__hoshikuzuRequestSharedMedia()",
+                    null);
+        } catch (Exception ignored) {
+            // The page will retry on the next resume/share.
+        }
+    }
+
+    /** Called by the JS bridge; imports pending shared images into the library. */
+    void consumeSharedMedia(String callbackId, int maxEdge, int quality) {
+        if (pendingSharedUris.isEmpty()) {
+            MobileLibrary.deliverCanceled(this, webView, callbackId);
+            return;
+        }
+        List<Uri> uris = new ArrayList<>(pendingSharedUris);
+        pendingSharedUris.clear();
+        MobileLibrary.importUris(
+                this,
+                webView,
+                uris,
+                callbackId,
+                maxEdge > 0 ? maxEdge : 1600,
+                quality >= 30 && quality <= 100 ? quality : 82);
+    }
+
+    /** Persist the current "on this day" card for the home-screen widget. */
+    void updateOnThisDayWidget(String json) {
+        try {
+            OnThisDayWidget.save(this, json);
+        } catch (Exception ignored) {
+            // A widget update must never disturb the album.
+        }
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return;
+        if (ContextCompat.checkSelfPermission(this,
+                android.Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        ActivityCompat.requestPermissions(
+                this,
+                new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                REQUEST_NOTIFICATIONS);
     }
 
     private SharedPreferences prefs() {
@@ -153,6 +327,7 @@ public class MainActivity extends AppCompatActivity {
         options.setBeepEnabled(false);
         options.setBarcodeImageEnabled(false);
         options.setOrientationLocked(false);
+        skipRelockOnce = true;
         scanLauncher.launch(options);
     }
 
@@ -248,6 +423,7 @@ public class MainActivity extends AppCompatActivity {
                     Intent intent = params.createIntent();
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
                     intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    skipRelockOnce = true;
                     startActivityForResult(intent, REQUEST_FILE_CHOOSER);
                     return true;
                 } catch (Exception error) {
@@ -299,6 +475,21 @@ public class MainActivity extends AppCompatActivity {
         return isLocalUrl(webView == null ? null : webView.getUrl());
     }
 
+    /** True while the WebView shows the paired desktop album (cast target). */
+    boolean isOnRemoteAlbum() {
+        if (webView == null) return false;
+        try {
+            Uri uri = Uri.parse(webView.getUrl());
+            String scheme = uri.getScheme();
+            if (scheme == null) return false;
+            String lower = scheme.toLowerCase(Locale.ROOT);
+            if (!lower.equals("http") && !lower.equals("https")) return false;
+            return isSameServer(uri);
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
     /**
      * External links from the local page open in the browser, but only http(s)
      * targets — no intent:// or file:// tricks through the bridge.
@@ -330,6 +521,12 @@ public class MainActivity extends AppCompatActivity {
         } else {
             showLoading(false, null);
         }
+        if (deviceHasLock() && !unlocked) {
+            showLock(true);
+            requestUnlock();
+        } else {
+            showLock(false);
+        }
     }
 
     void showConnect(boolean clearSaved) {
@@ -348,9 +545,11 @@ public class MainActivity extends AppCompatActivity {
         loadingLayer.setVisibility(View.GONE);
         statusText.setText(R.string.connect_hint);
         statusText.setTextColor(ContextCompat.getColor(this, R.color.muted));
+        startDiscovery();
     }
 
     private void closeConnect() {
+        stopDiscovery();
         setupScroll.setVisibility(View.GONE);
         loadingLayer.setVisibility(View.GONE);
         webView.setVisibility(View.VISIBLE);
@@ -363,6 +562,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void returnToLocal() {
+        stopDiscovery();
         setupScroll.setVisibility(View.GONE);
         loadingLayer.setVisibility(View.GONE);
         webView.setVisibility(View.VISIBLE);
@@ -376,10 +576,18 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         hideKeyboard();
+        stopDiscovery();
         mode = MODE_REMOTE;
         currentUrl = normalized;
         urlInput.setText(normalized);
         prefs().edit().putString(KEY_URL, normalized).apply();
+        savePairedDesktop(normalized);
+        if (deviceHasLock()) {
+            // The remote desktop album is not the private local library, but
+            // returning to local mode must pass the device credential again.
+            unlocked = false;
+            showLock(false);
+        }
         pageReady = false;
         mainFrameFailed = false;
         setupScroll.setVisibility(View.GONE);
@@ -421,8 +629,230 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void showSetup(String message) {
-        setupScroll.setVisibility(View.VISIBLE);
+    private void startDiscovery() {
+        if (discoveredSection == null || discoveredList == null || discoveredStatus == null) return;
+        if (discoveryClient != null) return;
+        discoveredSection.setVisibility(View.VISIBLE);
+        renderSavedDesktops();
+        discoveredStatus.setText(R.string.discovering);
+        discoveryClient = new DiscoveryClient();
+        discoveryClient.start(new DiscoveryClient.Listener() {
+            @Override
+            public void onDesktop(DiscoveryClient.Desktop desktop) {
+                runOnUiThread(() -> addDiscoveredDesktop(desktop));
+            }
+
+            @Override
+            public void onError(String message) {
+                runOnUiThread(() -> {
+                    if (discoveredList != null && discoveredList.getChildCount() == 0) {
+                        discoveredStatus.setText("未发现电脑：" + message);
+                    }
+                });
+            }
+        });
+    }
+
+    private void stopDiscovery() {
+        if (discoveryClient != null) {
+            discoveryClient.stop();
+            discoveryClient = null;
+        }
+    }
+
+    private void renderSavedDesktops() {
+        if (discoveredList == null) return;
+        discoveredList.removeAllViews();
+        JSONArray saved = loadSavedPairs();
+        for (int index = 0; index < saved.length(); index += 1) {
+            JSONObject entry = saved.optJSONObject(index);
+            if (entry == null) continue;
+            String url = entry.optString("url", "");
+            String label = entry.optString("label", "");
+            String host = entry.optString("host", "");
+            int port = entry.optInt("port", 0);
+            if (TextUtils.isEmpty(url)) continue;
+            if (TextUtils.isEmpty(label)) label = host + ":" + port;
+            addDesktopRow(
+                    "saved:" + host + ":" + port,
+                    label,
+                    getString(R.string.discovered_paired),
+                    v -> connectTo(url, false),
+                    v -> {
+                        removeSavedDesktop(host, port);
+                        Toast.makeText(this, R.string.saved_removed, Toast.LENGTH_SHORT).show();
+                        stopDiscovery();
+                        startDiscovery();
+                        return true;
+                    });
+        }
+        if (saved.length() == 0 && discoveredList.getChildCount() == 0) {
+            discoveredStatus.setText(R.string.discovered_none);
+        }
+    }
+
+    private void addDiscoveredDesktop(DiscoveryClient.Desktop desktop) {
+        if (discoveredList == null || discoveredSection == null) return;
+        if (findSavedDesktop(desktop.address, desktop.port) != null) return;
+        String tag = "discovered:" + desktop.key();
+        if (discoveredList.findViewWithTag(tag) != null) return;
+        String subtitle = desktop.address + ":" + desktop.port + " · "
+                + getString(R.string.discovered_new);
+        addDesktopRow(tag, desktop.name, subtitle, v -> {
+            urlInput.setText("http://" + desktop.address + ":" + desktop.port + "/m");
+            urlInput.setSelection(urlInput.getText().length());
+            statusText.setText(R.string.pair_first);
+            statusText.setTextColor(ContextCompat.getColor(this, R.color.aqua));
+            urlInput.requestFocus();
+        }, null);
+        discoveredStatus.setText(getString(
+                R.string.discovered_found, discoveredList.getChildCount()));
+    }
+
+    private void addDesktopRow(String tag, String title, String subtitle,
+                               View.OnClickListener click,
+                               View.OnLongClickListener longClick) {
+        if (discoveredList == null) return;
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setBackgroundResource(R.drawable.bg_card);
+        row.setPadding(dp(14), dp(11), dp(14), dp(11));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setTag(tag);
+
+        TextView heading = new TextView(this);
+        heading.setText(title);
+        heading.setTextColor(ContextCompat.getColor(this, R.color.ink));
+        heading.setTextSize(13);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        row.addView(heading);
+
+        TextView detail = new TextView(this);
+        detail.setText(subtitle);
+        detail.setTextColor(ContextCompat.getColor(this, R.color.muted));
+        detail.setTextSize(10.5f);
+        detail.setLineSpacing(dp(2), 1f);
+        LinearLayout.LayoutParams detailParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        detailParams.topMargin = dp(3);
+        row.addView(detail, detailParams);
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = dp(8);
+        row.setLayoutParams(params);
+        row.setOnClickListener(click);
+        if (longClick != null) row.setOnLongClickListener(longClick);
+        discoveredList.addView(row);
+        discoveredSection.setVisibility(View.VISIBLE);
+    }
+
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private JSONArray loadSavedPairs() {
+        try {
+            return new JSONArray(prefs().getString(KEY_PAIRS, "[]"));
+        } catch (Exception error) {
+            return new JSONArray();
+        }
+    }
+
+    private void persistSavedPairs(JSONArray entries) {
+        prefs().edit().putString(KEY_PAIRS, entries.toString()).apply();
+    }
+
+    private void savePairedDesktop(String normalized) {
+        try {
+            Uri uri = Uri.parse(normalized);
+            String scheme = uri.getScheme();
+            String path = uri.getPath();
+            String authority = uri.getAuthority();
+            String host = uri.getHost();
+            if (scheme == null || path == null || authority == null || host == null) return;
+            scheme = scheme.toLowerCase(Locale.ROOT);
+            if (!scheme.equals("http") && !scheme.equals("https")) return;
+            if (!path.matches("^/m/[A-Za-z0-9_-]{8,}/?$")) return;
+            int at = authority.lastIndexOf('@');
+            if (at >= 0) authority = authority.substring(at + 1);
+            String clean = scheme + "://" + authority + "/m";
+            int port = effectivePort(uri);
+
+            JSONArray existing = loadSavedPairs();
+            JSONArray next = new JSONArray();
+            for (int index = 0; index < existing.length(); index += 1) {
+                JSONObject entry = existing.optJSONObject(index);
+                if (entry == null) continue;
+                if (host.equalsIgnoreCase(entry.optString("host"))
+                        && port == entry.optInt("port", 0)) {
+                    continue;
+                }
+                next.put(entry);
+            }
+            JSONObject saved = new JSONObject();
+            saved.put("url", clean);
+            saved.put("host", host);
+            saved.put("port", port);
+            saved.put("label", host + ":" + port);
+            saved.put("savedAt", System.currentTimeMillis());
+            next.put(saved);
+            if (next.length() > 8) {
+                JSONArray trimmed = new JSONArray();
+                for (int index = next.length() - 8; index < next.length(); index += 1) {
+                    trimmed.put(next.get(index));
+                }
+                next = trimmed;
+            }
+            persistSavedPairs(next);
+        } catch (Exception ignored) {
+            // A malformed URL simply does not create a saved pairing.
+        }
+    }
+
+    private JSONObject findSavedDesktop(String host, int port) {
+        JSONArray saved = loadSavedPairs();
+        for (int index = 0; index < saved.length(); index += 1) {
+            JSONObject entry = saved.optJSONObject(index);
+            if (entry == null) continue;
+            if (host != null && host.equalsIgnoreCase(entry.optString("host"))
+                    && port == entry.optInt("port", 0)) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    private void removeSavedDesktop(String host, int port) {
+        JSONArray existing = loadSavedPairs();
+        JSONArray next = new JSONArray();
+        for (int index = 0; index < existing.length(); index += 1) {
+            JSONObject entry = existing.optJSONObject(index);
+            if (entry == null) continue;
+            if (host != null && host.equalsIgnoreCase(entry.optString("host"))
+                    && port == entry.optInt("port", 0)) {
+                continue;
+            }
+            next.put(entry);
+        }
+        persistSavedPairs(next);
+    }
+
+    private void removeSavedDesktopForUrl(String url) {
+        if (url == null) return;
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host != null) removeSavedDesktop(host, effectivePort(uri));
+        } catch (Exception ignored) {
+            // Ignore malformed saved URLs.
+        }
+    }
+
+    private void showSetup(String message) {        setupScroll.setVisibility(View.VISIBLE);
         webView.setVisibility(View.GONE);
         webView.setKeepScreenOn(false);
         loadingLayer.setVisibility(View.GONE);
@@ -584,6 +1014,10 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
+        if (!unlocked && lockLayer != null && lockLayer.getVisibility() == View.VISIBLE) {
+            moveTaskToBack(true);
+            return;
+        }
         if (setupScroll.getVisibility() == View.VISIBLE) {
             closeConnect();
             return;
@@ -616,6 +1050,7 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
+            skipRelockOnce = true;
             startActivityForResult(intent, REQUEST_PICK_MEDIA);
         } catch (Exception error) {
             String callback = pendingPickCallbackId;
@@ -653,8 +1088,142 @@ public class MainActivity extends AppCompatActivity {
         return APP_VERSION;
     }
 
+    /** Deliver a native action result back to the local page callback. */
+    void deliverActionResult(String callbackId, String json) {
+        if (callbackId == null) return;
+        runOnUiThread(() -> {
+            if (webView == null) return;
+            try {
+                String script =
+                        "window.__hoshikuzuMobileActionResult&&window.__hoshikuzuMobileActionResult("
+                                + JSONObject.quote(callbackId) + "," + JSONObject.quote(json) + ")";
+                webView.evaluateJavascript(script, null);
+            } catch (Exception ignored) {
+                // WebView may be gone.
+            }
+        });
+    }
+
+    /** Export the album JSON through ACTION_CREATE_DOCUMENT. */
+    void exportBackupText(String callbackId, String name, String text) {
+        if (callbackId == null) return;
+        if (backupBusy) {
+            deliverActionResult(callbackId, backupError("已有备份操作进行中。"));
+            return;
+        }
+        backupBusy = true;
+        new Thread(() -> {
+            try {
+                File file = BackupActions.writeCacheText(getApplicationContext(), text);
+                runOnUiThread(() -> launchBackupExport(
+                        callbackId, name, file, "application/json"));
+            } catch (Exception error) {
+                backupBusy = false;
+                deliverActionResult(callbackId, backupError(
+                        error.getMessage() == null ? "导出失败。" : error.getMessage()));
+            }
+        }, "hoshikuzu-backup-text").start();
+    }
+
+    /** Export album + originals + previews as a ZIP through ACTION_CREATE_DOCUMENT. */
+    void exportBackupZip(String callbackId, String name, String albumJson) {
+        if (callbackId == null) return;
+        if (backupBusy) {
+            deliverActionResult(callbackId, backupError("已有备份操作进行中。"));
+            return;
+        }
+        backupBusy = true;
+        new Thread(() -> {
+            try {
+                File file = BackupActions.buildZip(getApplicationContext(), albumJson);
+                runOnUiThread(() -> launchBackupExport(
+                        callbackId, name, file, "application/zip"));
+            } catch (Exception error) {
+                backupBusy = false;
+                deliverActionResult(callbackId, backupError(
+                        error.getMessage() == null ? "打包失败。" : error.getMessage()));
+            }
+        }, "hoshikuzu-backup-zip").start();
+    }
+
+    /** Import a JSON or ZIP backup through ACTION_OPEN_DOCUMENT. */
+    void importBackup(String callbackId) {
+        if (callbackId == null) return;
+        if (backupBusy) {
+            deliverActionResult(callbackId, backupError("已有备份操作进行中。"));
+            return;
+        }
+        backupBusy = true;
+        pendingBackupCallbackId = callbackId;
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                "application/json",
+                "application/zip",
+                "application/x-zip-compressed",
+                "application/octet-stream",
+                "text/plain"
+        });
+        try {
+            skipRelockOnce = true;
+            startActivityForResult(intent, REQUEST_BACKUP_IMPORT);
+        } catch (Exception error) {
+            backupBusy = false;
+            pendingBackupCallbackId = null;
+            deliverActionResult(callbackId, backupError(
+                    error.getMessage() == null ? "无法打开文件选择器。" : error.getMessage()));
+        }
+    }
+
+    private void launchBackupExport(String callbackId, String name, File file, String mime) {
+        pendingBackupCallbackId = callbackId;
+        pendingBackupFile = file;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(mime);
+        boolean zip = "application/zip".equals(mime);
+        intent.putExtra(Intent.EXTRA_TITLE, BackupActions.safeName(
+                name,
+                zip ? "hoshikuzu-library" : "hoshikuzu-album",
+                zip ? ".zip" : ".json"));
+        try {
+            skipRelockOnce = true;
+            startActivityForResult(intent, REQUEST_BACKUP_EXPORT);
+        } catch (Exception error) {
+            backupBusy = false;
+            pendingBackupCallbackId = null;
+            pendingBackupFile = null;
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
+            deliverActionResult(callbackId, backupError(
+                    error.getMessage() == null ? "无法打开保存对话框。" : error.getMessage()));
+        }
+    }
+
+    private static String backupCanceled() {
+        return "{\"ok\":false,\"canceled\":true}";
+    }
+
+    private static String backupError(String message) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("ok", false);
+            payload.put("error", message == null || message.isEmpty() ? "备份操作失败。" : message);
+            return payload.toString();
+        } catch (Exception ignored) {
+            return "{\"ok\":false,\"error\":\"备份操作失败。\"}";
+        }
+    }
+
     void httpRequest(String callbackId, String requestJson) {
         HttpBridge.request(this, webView, callbackId, requestJson);
+    }
+
+    /** Post a system notification for a cast while the page is backgrounded. */
+    void notifyCast(String photoId, String title, String body) {
+        if (!isOnRemoteAlbum()) return;
+        CastNotifier.show(this, photoId, title, body);
     }
 
     String md5Hex(String base64) {
@@ -675,6 +1244,61 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_UNLOCK) {
+            unlockInFlight = false;
+            pausedAt = 0;
+            if (resultCode == RESULT_OK) {
+                unlocked = true;
+                showLock(false);
+            } else {
+                unlocked = false;
+                showLock(true);
+            }
+            return;
+        }
+        if (requestCode == REQUEST_BACKUP_EXPORT) {
+            String callback = pendingBackupCallbackId;
+            File file = pendingBackupFile;
+            pendingBackupCallbackId = null;
+            pendingBackupFile = null;
+            backupBusy = false;
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+                if (file != null) {
+                    //noinspection ResultOfMethodCallIgnored
+                    file.delete();
+                }
+                deliverActionResult(callback, backupCanceled());
+                return;
+            }
+            if (file == null) {
+                deliverActionResult(callback, backupError("备份临时文件缺失。"));
+                return;
+            }
+            Uri target = data.getData();
+            new Thread(() -> {
+                String result = BackupActions.exportFile(
+                        getApplicationContext(), target, file);
+                deliverActionResult(callback, result);
+            }, "hoshikuzu-backup-write").start();
+            return;
+        }
+        if (requestCode == REQUEST_BACKUP_IMPORT) {
+            String callback = pendingBackupCallbackId;
+            pendingBackupCallbackId = null;
+            pendingBackupFile = null;
+            backupBusy = false;
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+                deliverActionResult(callback, backupCanceled());
+                return;
+            }
+            Uri source = data.getData();
+            new Thread(() -> {
+                String result = BackupActions.importDocument(
+                        getApplicationContext(), source);
+                deliverActionResult(callback, result);
+            }, "hoshikuzu-backup-read").start();
+            return;
+        }
         if (requestCode == REQUEST_PICK_MEDIA) {
             String callback = pendingPickCallbackId;
             pendingPickCallbackId = null;
@@ -722,19 +1346,56 @@ public class MainActivity extends AppCompatActivity {
             webView.onResume();
             webView.resumeTimers();
         }
+        if (setupScroll != null && setupScroll.getVisibility() == View.VISIBLE) {
+            startDiscovery();
+        }
+        long away = pausedAt > 0 ? System.currentTimeMillis() - pausedAt : 0;
+        pausedAt = 0;
+        if (skipRelockOnce) {
+            skipRelockOnce = false;
+            away = 0;
+        }
+        if (away > RELOCK_AFTER_MS
+                && mode == MODE_LOCAL
+                && unlocked
+                && !unlockInFlight
+                && deviceHasLock()) {
+            unlocked = false;
+            showLock(true);
+            requestUnlock();
+        } else if (unlocked) {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
     }
 
     @Override
     protected void onPause() {
+        pausedAt = System.currentTimeMillis();
+        stopDiscovery();
+        if (mode == MODE_LOCAL && deviceHasLock()) {
+            // Hide the local album from the recents snapshot while the app is
+            // in the background; it is cleared again on resume when unlocked.
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
         if (webView != null) {
             webView.onPause();
-            webView.pauseTimers();
+            // Keep timers/SSE alive while paired to the desktop. A true
+            // background service is still preferable on aggressive OEMs, but
+            // this keeps the live cast connection alive across short pauses.
+            if (mode != MODE_REMOTE) webView.pauseTimers();
         }
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
+        stopDiscovery();
+        if (pendingBackupFile != null) {
+            //noinspection ResultOfMethodCallIgnored
+            pendingBackupFile.delete();
+            pendingBackupFile = null;
+        }
+        pendingBackupCallbackId = null;
         if (webView != null) {
             try {
                 webView.removeJavascriptInterface("HoshikuzuAndroid");
@@ -815,6 +1476,7 @@ public class MainActivity extends AppCompatActivity {
             // Keep the display awake only for the live desktop cast page. The
             // local album behaves like a normal gallery and may sleep.
             webView.setKeepScreenOn(mode == MODE_REMOTE);
+            if (mode == MODE_LOCAL) handlePendingShares();
         }
 
         @Override
@@ -844,14 +1506,17 @@ public class MainActivity extends AppCompatActivity {
                 mainFrameFailed = true;
                 mode = MODE_LOCAL;
                 previousMode = MODE_LOCAL;
+                if (currentUrl != null) removeSavedDesktopForUrl(currentUrl);
                 prefs().edit().remove(KEY_URL).apply();
                 urlInput.setText("");
                 showSetup("配对已过期。请在电脑上刷新二维码，然后用手机重新扫描；本地相册不受影响。");
+                startDiscovery();
             } else if (status >= 500) {
                 mainFrameFailed = true;
                 mode = MODE_LOCAL;
                 previousMode = MODE_LOCAL;
                 showSetup("电脑端服务暂时不可用（HTTP " + status + "）。本地相册不受影响，稍后可再连接。");
+                startDiscovery();
             }
         }
     }

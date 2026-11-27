@@ -1,4 +1,4 @@
-import type { LibraryScanResult, PhotoMetaSource, WorldInfo } from '../types';
+import type { LibraryScanResult, PhotoDraft, PhotoMetaSource, WorldInfo } from '../types';
 
 export type ImageLoadingMode = 'realtime' | 'predictive' | 'preload';
 
@@ -95,6 +95,7 @@ export interface DesktopImportDraft {
   worldInstanceId?: string;
   world?: WorldInfo | null;
   managedCopy: boolean;
+  players?: Array<{ id: string; displayName: string }>;
 }
 
 export interface DesktopImportResult {
@@ -132,6 +133,99 @@ export interface DesktopBackupResult {
   path?: string;
   error?: string;
   canceled?: boolean;
+}
+
+export type AutoBackupKind = 'metadata' | 'full';
+
+export interface DesktopAutoBackupView {
+  enabled: boolean;
+  folder: string;
+  effectiveFolder: string;
+  usingDefaultFolder: boolean;
+  intervalDays: number;
+  kind: AutoBackupKind;
+  retention: number;
+  lastRunAt: string | null;
+  lastAttemptAt: string | null;
+  lastPath: string;
+  lastError: string | null;
+  nextRunAt: string | null;
+  due: boolean;
+  running: boolean;
+}
+
+export interface DesktopYearReviewSummary {
+  year: number;
+  photos: number;
+  worlds: number;
+  favorites: number;
+  images: number;
+  bytes: number;
+}
+
+export interface DesktopYearReviewResult {
+  ok: boolean;
+  path?: string;
+  filename?: string;
+  summary?: DesktopYearReviewSummary;
+  error?: string;
+  canceled?: boolean;
+}
+
+export type PlayerAvatarKind = 'avatar' | 'profile' | 'icon';
+
+export interface PlayerAvatarSnapshot {
+  file: string;
+  sourceUrl: string;
+  kind: PlayerAvatarKind;
+  capturedAt: string;
+  avatarUrl: string;
+}
+
+export interface DesktopPlayer {
+  id: string;
+  displayName: string;
+  username: string;
+  isFriend: boolean;
+  isSelf: boolean;
+  status: string;
+  statusDescription: string;
+  pronouns: string;
+  lastPlatform: string;
+  lastLogin: string;
+  joinedAt: string;
+  note: string;
+  source: 'friend-sync' | 'vrcx' | 'photo-tag' | 'manual';
+  avatar: PlayerAvatarSnapshot | null;
+  avatarHistory: PlayerAvatarSnapshot[];
+  avatarUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  syncedAt: string;
+  removedFromFriendsAt: string;
+}
+
+export type PlayerSyncPhase = 'idle' | 'friends' | 'avatars' | 'tagged';
+
+export interface PlayerSyncStatus {
+  running: boolean;
+  phase: PlayerSyncPhase;
+  current: number;
+  total: number;
+  message: string;
+  error: string | null;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+  totalPlayers: number;
+  friendCount: number;
+}
+
+export interface PlayerLibraryView {
+  ok: boolean;
+  error?: string;
+  me: { id: string; displayName: string; avatar: PlayerAvatarSnapshot | null } | null;
+  players: DesktopPlayer[];
+  status: PlayerSyncStatus;
 }
 
 export interface DesktopBackgroundSaveResult {
@@ -252,6 +346,11 @@ export interface DesktopAppInfo {
   electron: string;
   chrome: string;
   node: string;
+}
+
+export interface DesktopPreferences {
+  closeToTray: boolean;
+  launchAtLogin: boolean;
 }
 
 export interface DesktopSyncStatus {
@@ -687,6 +786,8 @@ export interface DesktopBridge {
     onPreviewReady: (callback: (payload: Array<{ hash: string; previewPath: string }> | { hash: string; previewPath: string }) => void) => () => void;
     onPreviewProgress: (callback: (progress: PreviewProgress) => void) => () => void;
     onLibraryChanged: (callback: (config: DesktopLibraryConfig) => void) => () => void;
+    /** Phone uploads / watched-folder imports: merge a draft into the album. */
+    onImported: (callback: (draft: PhotoDraft) => void) => () => void;
   };
   album: {
     loadSync: () => DesktopAlbumLoadResult;
@@ -715,6 +816,67 @@ export interface DesktopBridge {
       error?: string;
       canceled?: boolean;
     }>;
+    getAutoConfig: () => Promise<DesktopAutoBackupView>;
+    setAutoConfig: (patch: {
+      enabled?: boolean;
+      folder?: string;
+      intervalDays?: number;
+      kind?: AutoBackupKind;
+      retention?: number;
+    }) => Promise<{ ok: boolean; error?: string; config: DesktopAutoBackupView }>;
+    chooseAutoFolder: () => Promise<{
+      ok: boolean;
+      canceled?: boolean;
+      error?: string;
+      config: DesktopAutoBackupView;
+    }>;
+    runAutoNow: () => Promise<{
+      ok: boolean;
+      path?: string;
+      kind?: AutoBackupKind;
+      bytes?: number;
+      error?: string;
+      config: DesktopAutoBackupView;
+    }>;
+    onAutoStatus: (callback: (status: DesktopAutoBackupView) => void) => () => void;
+  };
+  review: {
+    getYears: () => Promise<{ ok: boolean; years: number[] }>;
+    exportYear: (year: number) => Promise<DesktopYearReviewResult>;
+  };
+  players: {
+    list: () => Promise<PlayerLibraryView>;
+    status: () => Promise<{ ok: boolean; status: PlayerSyncStatus }>;
+    sync: () => Promise<{
+      ok: boolean;
+      friends?: number;
+      needsLogin?: boolean;
+      error?: string;
+      status: PlayerSyncStatus;
+    }>;
+    add: (payload: {
+      id?: string;
+      displayName?: string;
+      note?: string;
+    }) => Promise<{
+      ok: boolean;
+      player?: DesktopPlayer | null;
+      warning?: string;
+      error?: string;
+    }>;
+    update: (
+      id: string,
+      patch: { displayName?: string; note?: string },
+    ) => Promise<{ ok: boolean; player?: DesktopPlayer | null; error?: string }>;
+    remove: (id: string) => Promise<{ ok: boolean; error?: string }>;
+    refresh: (id: string) => Promise<{
+      ok: boolean;
+      player?: DesktopPlayer | null;
+      error?: string;
+      needsLogin?: boolean;
+    }>;
+    onStatus: (callback: (status: PlayerSyncStatus) => void) => () => void;
+    onChanged: (callback: (change: { updatedAt: string; count: number }) => void) => () => void;
   };
   background: {
     saveVideo: (payload: {
@@ -786,6 +948,11 @@ export interface DesktopBridge {
   app: {
     info: () => Promise<DesktopAppInfo>;
     openExternal: (url: string) => Promise<void>;
+    getPreferences: () => Promise<DesktopPreferences>;
+    setPreferences: (patch: Partial<DesktopPreferences>) => Promise<{
+      ok: boolean;
+      preferences: DesktopPreferences;
+    }>;
     onCommand: (callback: (command: string) => void) => () => void;
   };
   sync: {
@@ -971,6 +1138,151 @@ export interface DesktopBridge {
     onStatus: (callback: (status: MobileStatusView) => void) => () => void;
     onCast: (callback: (result: MobileActionResult) => void) => () => void;
   };
+  autoImport: {
+    getConfig: () => Promise<AutoImportConfigView>;
+    setConfig: (patch: {
+      enabled?: boolean;
+      folder?: string;
+    }) => Promise<AutoImportResult>;
+    chooseFolder: () => Promise<AutoImportResult>;
+    scanNow: () => Promise<AutoImportResult>;
+    status: () => Promise<AutoImportConfigView>;
+    onStatus: (callback: (status: AutoImportStatusView) => void) => () => void;
+  };
+  duplicates: {
+    scan: () => Promise<DuplicateScanResult>;
+    cancel: () => Promise<{ ok: boolean }>;
+    trash: (
+      items: Array<{ id: string; libraryPath: string }>,
+    ) => Promise<DuplicateTrashResult>;
+    onProgress: (callback: (progress: DuplicateProgress) => void) => () => void;
+  };
+  health: {
+    scan: () => Promise<HealthScanResult>;
+    cleanPreviews: () => Promise<HealthCleanupResult>;
+    emptyTrash: () => Promise<HealthCleanupResult>;
+  };
+  wallpaper: {
+    set: (payload: { libraryPath: string }) => Promise<{
+      ok: boolean;
+      path?: string;
+      error?: string;
+    }>;
+  };
+}
+
+export interface HealthCounts {
+  photos: number;
+  previews: number;
+  previewBytes: number;
+  missing: number;
+  orphanPreviews: number;
+  duplicatePaths: number;
+  duplicateHashes: number;
+  trashCount: number;
+  trashBytes: number;
+}
+
+export interface HealthIssue {
+  id: string;
+  severity: 'ok' | 'info' | 'warning';
+  title: string;
+  detail: string;
+  count: number;
+  bytes: number;
+}
+
+export interface HealthScanResult {
+  ok: boolean;
+  error?: string;
+  generatedAt?: string;
+  counts: Partial<HealthCounts>;
+  missingIds?: string[];
+  issues: HealthIssue[];
+}
+
+export interface HealthCleanupResult {
+  ok: boolean;
+  error?: string;
+  removed: number;
+  bytes: number;
+}
+
+export interface DuplicateEntry {
+  id: string;
+  libraryPath: string;
+  fileName: string;
+  size: number;
+  capturedAt: string;
+  note: string;
+  previewPath: string;
+  managedCopy: boolean;
+}
+
+export interface DuplicateGroup {
+  hash: string;
+  entries: DuplicateEntry[];
+  totalBytes: number;
+  reclaimableBytes: number;
+  suggestedKeepId: string;
+}
+
+export interface DuplicateProgress {
+  done: number;
+  total: number;
+  scanned: number;
+  skipped: number;
+  file: string;
+}
+
+export interface DuplicateScanResult {
+  ok: boolean;
+  canceled?: boolean;
+  error?: string;
+  groups: DuplicateGroup[];
+  scanned: number;
+  skipped?: number;
+  totalBytes?: number;
+  reclaimableBytes?: number;
+}
+
+export interface DuplicateTrashResult {
+  ok: boolean;
+  error?: string;
+  trashDir?: string;
+  trashed: Array<{ id: string; libraryPath: string; to: string }>;
+  errors: Array<{ id: string; error: string }>;
+}
+
+export interface AutoImportStatusView {
+  enabled: boolean;
+  folder: string;
+  running: boolean;
+  scanning: boolean;
+  watched: boolean;
+  startedAt: string | null;
+  lastScanAt: string | null;
+  lastImportedAt: string | null;
+  importedCount: number;
+  lastError: string | null;
+}
+
+export interface AutoImportConfigView {
+  enabled: boolean;
+  folder: string;
+  lastScanAt: string | null;
+  status: AutoImportStatusView;
+}
+
+export interface AutoImportResult {
+  ok: boolean;
+  error?: string;
+  canceled?: boolean;
+  imported?: number;
+  skipped?: number;
+  failed?: number;
+  remaining?: number;
+  config: AutoImportConfigView;
 }
 
 /** Returns the preload bridge when running inside the desktop client. */

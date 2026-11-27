@@ -2,21 +2,28 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  Download,
   FolderOpen,
   ImageOff,
   Loader2,
+  Monitor,
   Pin,
   PinOff,
   RotateCcw,
   RotateCw,
   ScanText,
+  Share2,
   Smartphone,
   Sparkles,
+  Star,
   Trash2,
   X,
 } from 'lucide-react';
 import type { Photo, WorldLibraryEntry } from '../types';
 import { getDesktopBridge, photoOriginalSrc, photoSrc } from '../platform';
+import { isMobileRuntime } from '../platform/mobileRuntime';
+import { saveManagedPhoto, shareManagedPhotos } from '../mobile/managedActions';
+import { normalizePhotoTag, normalizePhotoTags } from '../hooks/useAlbum';
 import { useMobileCast } from '../hooks/useMobileCast';
 import {
   formatDateLong,
@@ -78,8 +85,113 @@ export function PhotoDetailDialog({
   const [orientationRunning, setOrientationRunning] = useState(false);
   const [loadedOriginal, setLoadedOriginal] = useState<string | null>(null);
   const [failedOriginal, setFailedOriginal] = useState<string | null>(null);
+  const [mobileBusy, setMobileBusy] = useState<'save' | 'share' | null>(null);
+  const [wallpaperBusy, setWallpaperBusy] = useState(false);
+  const [tagDraft, setTagDraft] = useState('');
   const photoIdRef = useRef<string | null>(null);
   const dirty = noteDraft !== savedNote;
+  const mobileLocal = isMobileRuntime() && Boolean(photo?.libraryPath);
+
+  useEffect(() => {
+    setTagDraft('');
+  }, [photo?.id]);
+
+  const addTag = () => {
+    if (!photo) return;
+    const tag = normalizePhotoTag(tagDraft);
+    if (!tag) return;
+    const tags = normalizePhotoTags([...(photo.tags || []), tag]);
+    onUpdate(photo.id, { tags });
+    setTagDraft('');
+  };
+
+  const removeTag = (tag: string) => {
+    if (!photo) return;
+    onUpdate(photo.id, {
+      tags: normalizePhotoTags((photo.tags || []).filter((item) => item !== tag)),
+    });
+  };
+
+  const setAsWallpaper = async () => {
+    if (!photo?.libraryPath || wallpaperBusy) return;
+    if (!bridge?.wallpaper) {
+      pushToast({
+        tone: 'danger',
+        title: '当前环境不支持设置壁纸',
+        description: '请使用桌面 Windows 客户端打开存储库照片。',
+      });
+      return;
+    }
+    setWallpaperBusy(true);
+    try {
+      const result = await bridge.wallpaper.set({ libraryPath: photo.libraryPath });
+      pushToast(
+        result.ok
+          ? {
+              tone: 'success',
+              title: '已设为桌面壁纸',
+              description: result.path,
+            }
+          : {
+              tone: 'danger',
+              title: '设置壁纸失败',
+              description: result.error,
+            },
+      );
+    } catch (error) {
+      pushToast({
+        tone: 'danger',
+        title: '设置壁纸失败',
+        description: error instanceof Error ? error.message : '请重试。',
+      });
+    } finally {
+      setWallpaperBusy(false);
+    }
+  };
+
+  const handleMobileSave = async () => {
+    if (!photo || mobileBusy) return;
+    setMobileBusy('save');
+    try {
+      const result = await saveManagedPhoto(photo);
+      pushToast(
+        result.ok
+          ? {
+              tone: 'success',
+              title: '已保存到手机',
+              description: result.location || '可在系统相册 / 下载目录查看。',
+            }
+          : { tone: 'danger', title: '保存失败', description: result.error },
+      );
+    } catch (error) {
+      pushToast({
+        tone: 'danger',
+        title: '保存失败',
+        description: error instanceof Error ? error.message : '请重试。',
+      });
+    } finally {
+      setMobileBusy(null);
+    }
+  };
+
+  const handleMobileShare = async () => {
+    if (!photo || mobileBusy) return;
+    setMobileBusy('share');
+    try {
+      const result = await shareManagedPhotos([photo]);
+      if (!result.ok) {
+        pushToast({ tone: 'danger', title: '分享失败', description: result.error });
+      }
+    } catch (error) {
+      pushToast({
+        tone: 'danger',
+        title: '分享失败',
+        description: error instanceof Error ? error.message : '请重试。',
+      });
+    } finally {
+      setMobileBusy(null);
+    }
+  };
 
   useEffect(() => {
     if (!photo) {
@@ -511,6 +623,34 @@ export function PhotoDetailDialog({
               )}
               {isFeatured ? '已置顶 · 取消' : '设为首页置顶'}
             </button>
+            <button
+              type="button"
+              className={`detail-pin${photo.favorite ? ' is-active' : ''}`}
+              onClick={() =>
+                onUpdate(photo.id, { favorite: photo.favorite ? undefined : true })
+              }
+              aria-pressed={photo.favorite === true}
+              title={photo.favorite ? '取消收藏' : '收藏这张照片'}
+            >
+              <Star size={13} strokeWidth={1.8} aria-hidden="true" />
+              {photo.favorite ? '已收藏 · 取消' : '收藏'}
+            </button>
+            {photo.libraryPath && !mobileLocal && bridge?.wallpaper ? (
+              <button
+                type="button"
+                className="detail-pin"
+                onClick={() => void setAsWallpaper()}
+                disabled={wallpaperBusy}
+                title="把这张原图设为 Windows 桌面壁纸"
+              >
+                {wallpaperBusy ? (
+                  <Loader2 size={13} className="spin" aria-hidden="true" />
+                ) : (
+                  <Monitor size={13} strokeWidth={1.8} aria-hidden="true" />
+                )}
+                {wallpaperBusy ? '设置中…' : '设为壁纸'}
+              </button>
+            ) : null}
             {mobileCast.running ? (
               <button
                 type="button"
@@ -526,6 +666,36 @@ export function PhotoDetailDialog({
                 <Smartphone size={13} strokeWidth={1.8} aria-hidden="true" />
                 投送到手机
               </button>
+            ) : null}
+            {mobileLocal ? (
+              <span className="detail-mobile-actions">
+                <button
+                  type="button"
+                  className="detail-cast"
+                  onClick={() => void handleMobileSave()}
+                  disabled={mobileBusy !== null}
+                >
+                  {mobileBusy === 'save' ? (
+                    <Loader2 size={13} className="spin" aria-hidden="true" />
+                  ) : (
+                    <Download size={13} strokeWidth={1.8} aria-hidden="true" />
+                  )}
+                  保存到手机
+                </button>
+                <button
+                  type="button"
+                  className="detail-cast"
+                  onClick={() => void handleMobileShare()}
+                  disabled={mobileBusy !== null}
+                >
+                  {mobileBusy === 'share' ? (
+                    <Loader2 size={13} className="spin" aria-hidden="true" />
+                  ) : (
+                    <Share2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                  )}
+                  分享
+                </button>
+              </span>
             ) : null}
           </header>
 
@@ -569,6 +739,57 @@ export function PhotoDetailDialog({
                   保存变更
                 </button>
               </div>
+            </div>
+          </section>
+
+          <section className="detail-tags" aria-labelledby="detail-tags-title">
+            <div className="detail-section-head">
+              <div>
+                <p className="section-kicker">MY TAGS</p>
+                <h3 id="detail-tags-title">我的标签</h3>
+              </div>
+              <span className="char-count">{(photo.tags || []).length}/20</span>
+            </div>
+            <div className="detail-tags__list">
+              {(photo.tags || []).length === 0 ? (
+                <p className="detail-tags__empty">还没有自定义标签，可以按心情、角色或场景添加。</p>
+              ) : null}
+              {(photo.tags || []).map((tag) => (
+                <button
+                  type="button"
+                  className="detail-tag"
+                  key={tag}
+                  onClick={() => removeTag(tag)}
+                  title="点击移除这个标签"
+                >
+                  {tag}
+                  <span aria-hidden="true">×</span>
+                </button>
+              ))}
+            </div>
+            <div className="detail-tags__add">
+              <input
+                type="text"
+                value={tagDraft}
+                maxLength={24}
+                placeholder="添加标签，如：夜景、合影"
+                aria-label="添加标签"
+                onChange={(event) => setTagDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addTag();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="button button--ghost button--tiny"
+                onClick={addTag}
+                disabled={!tagDraft.trim() || (photo.tags || []).length >= 20}
+              >
+                添加
+              </button>
             </div>
           </section>
 

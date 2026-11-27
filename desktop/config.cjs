@@ -15,6 +15,12 @@ const DEFAULTS = {
     y: null,
     maximized: false,
   },
+  // Desktop shell behavior: keep background services alive in the tray and
+  // optionally start with Windows.
+  desktop: {
+    closeToTray: true,
+    launchAtLogin: false,
+  },
   ai: {
     protocol: 'openai',
     baseUrl: '',
@@ -39,6 +45,26 @@ const DEFAULTS = {
     port: 7880,
     preferredIp: '',
     receiveMode: 'stream',
+  },
+  // Watch a screenshots folder (e.g. VRChat) and copy new images into the
+  // library inbox. Source files are never moved or deleted.
+  autoImport: {
+    enabled: false,
+    folder: '',
+    lastScanAt: null,
+  },
+  // Scheduled desktop backups into a dedicated folder. Only files created by
+  // this service are pruned; the live library is never written.
+  autoBackup: {
+    enabled: false,
+    folder: '',
+    intervalDays: 7,
+    kind: 'metadata',
+    retention: 5,
+    lastRunAt: null,
+    lastAttemptAt: null,
+    lastPath: '',
+    lastError: null,
   },
   easytier: {
     corePath: '',

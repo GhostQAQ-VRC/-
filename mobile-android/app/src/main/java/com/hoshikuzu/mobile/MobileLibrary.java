@@ -151,21 +151,12 @@ final class MobileLibrary {
 
         String hash = hex(digest.digest());
         String originalName = hash + extension;
-        File original = new File(originalDir, originalName);
-        if (!original.exists()) {
-            if (!temp.renameTo(original)) {
-                copyFile(temp, original);
-                //noinspection ResultOfMethodCallIgnored
-                temp.delete();
-            }
-        } else {
-            //noinspection ResultOfMethodCallIgnored
-            temp.delete();
-        }
 
+        // Decode/EXIF from the cache copy first. A renamed executable or a
+        // corrupt share must never land in originals/ before it is validated.
         ExifInterface exif = null;
         try {
-            exif = new ExifInterface(original.getAbsolutePath());
+            exif = new ExifInterface(temp.getAbsolutePath());
         } catch (Exception ignored) {
             // Some formats have no EXIF; filename/mtime still work.
         }
@@ -175,8 +166,10 @@ final class MobileLibrary {
                 ExifInterface.ORIENTATION_NORMAL);
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(original.getAbsolutePath(), bounds);
+        BitmapFactory.decodeFile(temp.getAbsolutePath(), bounds);
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            //noinspection ResultOfMethodCallIgnored
+            temp.delete();
             throw new Exception("无法解码这张图片");
         }
 
@@ -187,8 +180,12 @@ final class MobileLibrary {
         }
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inSampleSize = sample;
-        Bitmap decoded = BitmapFactory.decodeFile(original.getAbsolutePath(), options);
-        if (decoded == null) throw new Exception("无法解码这张图片");
+        Bitmap decoded = BitmapFactory.decodeFile(temp.getAbsolutePath(), options);
+        if (decoded == null) {
+            //noinspection ResultOfMethodCallIgnored
+            temp.delete();
+            throw new Exception("无法解码这张图片");
+        }
 
         Bitmap oriented = applyOrientation(decoded, orientation);
         int width = oriented.getWidth();
@@ -212,7 +209,20 @@ final class MobileLibrary {
         if (oriented != decoded) oriented.recycle();
         decoded.recycle();
 
-        DateMetadata date = captureDate(exif, displayName, original.lastModified());
+        long modified = temp.lastModified();
+        File original = new File(originalDir, originalName);
+        if (!original.exists()) {
+            if (!temp.renameTo(original)) {
+                copyFile(temp, original);
+                //noinspection ResultOfMethodCallIgnored
+                temp.delete();
+            }
+        } else {
+            //noinspection ResultOfMethodCallIgnored
+            temp.delete();
+        }
+
+        DateMetadata date = captureDate(exif, displayName, modified);
         String worldText = displayName;
         if (exif != null) {
             worldText += "\n" + safe(exif.getAttribute(ExifInterface.TAG_XMP))

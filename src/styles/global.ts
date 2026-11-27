@@ -20,3 +20,4 @@ import './desktop.css';
 import './orientation.css';
 import './update.css';
 import './cast.css';
+import './slideshow.css';

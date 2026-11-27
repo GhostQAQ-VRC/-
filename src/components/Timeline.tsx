@@ -22,6 +22,10 @@ interface TimelineProps {
   onOpenPhoto: (id: string) => void;
   onRequestDelete: (id: string) => void;
   onUpload: () => void;
+  onToggleFavorite?: (id: string) => void;
+  selectionMode?: boolean;
+  selected?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
 interface EntryProps {
@@ -33,6 +37,10 @@ interface EntryProps {
   onRotatePhoto: (id: string, delta: -90 | 90) => void;
   onOpenPhoto: (id: string) => void;
   onRequestDelete: (id: string) => void;
+  onToggleFavorite?: (id: string) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 function TimelineEcho({
@@ -71,6 +79,10 @@ const TimelineEntry = memo(function TimelineEntry({
   onRotatePhoto,
   onOpenPhoto,
   onRequestDelete,
+  onToggleFavorite,
+  selectionMode,
+  selected,
+  onToggleSelect,
 }: EntryProps) {
   const { ref, inView } = useInView<HTMLDivElement>();
   const card = (
@@ -79,9 +91,15 @@ const TimelineEntry = memo(function TimelineEntry({
       index={index}
       pinned={pinned}
       onTogglePin={() => onTogglePin(photo.id)}
+      onToggleFavorite={
+        onToggleFavorite ? () => onToggleFavorite(photo.id) : undefined
+      }
       onRotate={() => onRotatePhoto(photo.id, -90)}
       onOpen={() => onOpenPhoto(photo.id)}
       onDelete={() => onRequestDelete(photo.id)}
+      selectionMode={selectionMode}
+      selected={selected}
+      onToggleSelect={() => onToggleSelect?.(photo.id)}
     />
   );
   const echo = (
@@ -106,8 +124,14 @@ const TimelineEntry = memo(function TimelineEntry({
         <button
           type="button"
           className="timeline-node"
-          onClick={() => onOpenPhoto(photo.id)}
-          aria-label={`打开 ${formatDateLong(photo.capturedAt)} 的照片`}
+          onClick={() =>
+            selectionMode ? onToggleSelect?.(photo.id) : onOpenPhoto(photo.id)
+          }
+          aria-label={
+            selectionMode
+              ? `${selected ? '取消选择' : '选择'} ${formatDateLong(photo.capturedAt)} 的照片`
+              : `打开 ${formatDateLong(photo.capturedAt)} 的照片`
+          }
           title={`${formatDateLong(photo.capturedAt)} · ${formatTime(photo.capturedAt)}`}
         >
           <span className="timeline-node__pulse" aria-hidden="true" />
@@ -136,6 +160,10 @@ export function Timeline({
   onOpenPhoto,
   onRequestDelete,
   onUpload,
+  onToggleFavorite,
+  selectionMode,
+  selected,
+  onToggleSelect,
 }: TimelineProps) {
   let entryIndex = 0;
 
@@ -211,6 +239,10 @@ export function Timeline({
                       onRotatePhoto={onRotatePhoto}
                       onOpenPhoto={onOpenPhoto}
                       onRequestDelete={onRequestDelete}
+                      onToggleFavorite={onToggleFavorite}
+                      selectionMode={selectionMode}
+                      selected={selected?.has(photo.id) ?? false}
+                      onToggleSelect={onToggleSelect}
                     />
                   );
                 })}

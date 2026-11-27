@@ -33,6 +33,16 @@ async function estimateFullBackupBytes(root) {
   } catch {
     // No previews yet.
   }
+  try {
+    const playerAvatars = path.join(root, CACHE_DIR, 'players', 'avatars');
+    const files = await fsp.readdir(playerAvatars);
+    for (const file of files) {
+      const stat = await fsp.stat(path.join(playerAvatars, file)).catch(() => null);
+      if (stat) total += stat.size;
+    }
+  } catch {
+    // No player avatars yet.
+  }
   return total;
 }
 

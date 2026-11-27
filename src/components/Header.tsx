@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { RefObject } from 'react';
-import { LayoutDashboard, MonitorSmartphone, Palette, Plus, Search, Sparkles } from 'lucide-react';
+import { CheckSquare, Clapperboard, LayoutDashboard, MonitorSmartphone, Palette, Plus, Search, Sparkles } from 'lucide-react';
 import { BrandGlyph } from './BrandGlyph';
 import { StarGlyph } from './StarGlyph';
 
@@ -15,6 +15,11 @@ interface HeaderProps {
   worldApiEnabled: boolean;
   /** Android shell only: open the optional desktop connection screen. */
   onConnectDesktop?: () => void;
+  /** Android shell only: enter/leave multi-select mode. */
+  onSelect?: () => void;
+  selectionActive?: boolean;
+  /** Open the full-screen memory slideshow. */
+  onSlideshow?: () => void;
 }
 
 export function Header({
@@ -27,6 +32,9 @@ export function Header({
   appearanceButtonRef,
   worldApiEnabled,
   onConnectDesktop,
+  onSelect,
+  selectionActive = false,
+  onSlideshow,
 }: HeaderProps) {
   const [scrolled, setScrolled] = useState(false);
 
@@ -66,6 +74,17 @@ export function Header({
         </nav>
 
         <div className="header-actions">
+          {onSlideshow ? (
+            <button
+              type="button"
+              className="icon-button header-slideshow"
+              onClick={onSlideshow}
+              aria-label="幻灯片 / 今日回忆"
+              title="幻灯片 / 今日回忆"
+            >
+              <Clapperboard size={17} strokeWidth={1.7} />
+            </button>
+          ) : null}
           <button
             type="button"
             ref={appearanceButtonRef}
@@ -99,6 +118,18 @@ export function Header({
               title="连接电脑（可选）"
             >
               <MonitorSmartphone size={17} strokeWidth={1.7} />
+            </button>
+          ) : null}
+          {onSelect ? (
+            <button
+              type="button"
+              className={`icon-button header-select${selectionActive ? ' is-active' : ''}`}
+              onClick={onSelect}
+              aria-pressed={selectionActive}
+              aria-label={selectionActive ? '退出选择模式' : '选择照片'}
+              title={selectionActive ? '退出选择' : '多选照片'}
+            >
+              <CheckSquare size={17} strokeWidth={1.7} />
             </button>
           ) : null}
           <a

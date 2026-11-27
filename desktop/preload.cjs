@@ -31,7 +31,7 @@ function encodePath(relativePath) {
 
 contextBridge.exposeInMainWorld('hoshikuzu', {
   desktop: {
-    version: '1.1.3',
+    version: '1.5.0',
     platform: process.platform,
     library: {
       getConfig: () => invoke('library:get-config'),
@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('hoshikuzu', {
       onPreviewReady: (callback) => subscribe('library:preview-ready', callback),
       onPreviewProgress: (callback) => subscribe('library:preview-progress', callback),
       onLibraryChanged: (callback) => subscribe('library:changed', callback),
+      onImported: (callback) => subscribe('library:imported', callback),
     },
     album: {
       loadSync: () => sendSync('album:load-sync'),
@@ -79,6 +80,26 @@ contextBridge.exposeInMainWorld('hoshikuzu', {
       exportMetadata: () => invoke('backup:export-metadata'),
       exportFull: () => invoke('backup:export-full'),
       importFile: () => invoke('backup:import-file'),
+      getAutoConfig: () => invoke('backup:auto-get'),
+      setAutoConfig: (patch) => invoke('backup:auto-set', patch),
+      chooseAutoFolder: () => invoke('backup:auto-choose-folder'),
+      runAutoNow: () => invoke('backup:auto-run-now'),
+      onAutoStatus: (callback) => subscribe('backup:auto-status', callback),
+    },
+    review: {
+      getYears: () => invoke('review:years'),
+      exportYear: (year) => invoke('review:export', year),
+    },
+    players: {
+      list: () => invoke('players:list'),
+      status: () => invoke('players:status'),
+      sync: () => invoke('players:sync'),
+      add: (payload) => invoke('players:add', payload),
+      update: (id, patch) => invoke('players:update', id, patch),
+      remove: (id) => invoke('players:remove', id),
+      refresh: (id) => invoke('players:refresh', id),
+      onStatus: (callback) => subscribe('players:status', callback),
+      onChanged: (callback) => subscribe('players:changed', callback),
     },
     background: {
       saveVideo: (payload) => invoke('background:save-video', payload),
@@ -115,6 +136,8 @@ contextBridge.exposeInMainWorld('hoshikuzu', {
     app: {
       info: () => invoke('app:info'),
       openExternal: (url) => invoke('app:open-external', url),
+      getPreferences: () => invoke('app:get-preferences'),
+      setPreferences: (patch) => invoke('app:set-preferences', patch),
       onCommand: (callback) => subscribe('app:command', callback),
     },
     sync: {
@@ -188,6 +211,28 @@ contextBridge.exposeInMainWorld('hoshikuzu', {
       disconnect: (payload) => invoke('mobile:disconnect', payload),
       onStatus: (callback) => subscribe('mobile:status', callback),
       onCast: (callback) => subscribe('mobile:cast', callback),
+    },
+    autoImport: {
+      getConfig: () => invoke('autoimport:get-config'),
+      setConfig: (patch) => invoke('autoimport:set-config', patch),
+      chooseFolder: () => invoke('autoimport:choose-folder'),
+      scanNow: () => invoke('autoimport:scan-now'),
+      status: () => invoke('autoimport:status'),
+      onStatus: (callback) => subscribe('autoimport:status', callback),
+    },
+    duplicates: {
+      scan: () => invoke('duplicates:scan'),
+      cancel: () => invoke('duplicates:cancel'),
+      trash: (items) => invoke('duplicates:trash', items),
+      onProgress: (callback) => subscribe('duplicates:progress', callback),
+    },
+    health: {
+      scan: () => invoke('health:scan'),
+      cleanPreviews: () => invoke('health:clean-previews'),
+      emptyTrash: () => invoke('health:empty-trash'),
+    },
+    wallpaper: {
+      set: (payload) => invoke('wallpaper:set', payload),
     },
   },
 });

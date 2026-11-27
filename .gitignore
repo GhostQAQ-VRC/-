@@ -12,6 +12,7 @@ release/
 build/icon.png
 build/icon-256.png
 desktop/.smoke/
+desktop/.smoke-packaged/
 desktop/.smoke-onboarding/
 desktop/.smoke-thumbnails/
 desktop/data/

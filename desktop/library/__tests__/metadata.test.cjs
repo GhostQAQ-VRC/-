@@ -107,6 +107,32 @@ test('VRCX Description JSON supplies world, author and timestamp', () => {
   assert.equal(result.worldInstanceId, `${WORLD_B}:48291~region(jp)`);
   assert.equal(result.metaSource, 'json');
   assert.equal(new Date(result.capturedAt).getFullYear(), 2024);
+  assert.deepEqual(result.players, []);
+});
+
+test('VRCX players array supplies tagged VRChat user ids and names', () => {
+  const friend = 'usr_11111111-1111-4111-8111-111111111111';
+  const stranger = 'usr_22222222-2222-4222-8222-222222222222';
+  const description = JSON.stringify({
+    application: 'VRCX',
+    version: 1,
+    players: [
+      { id: friend, displayName: 'Alice' },
+      { userId: stranger, name: 'Bob' },
+      { id: friend, displayName: 'Alice duplicate' },
+      { id: 'local_not-vrchat', displayName: 'Ignored' },
+    ],
+    Timestamp: '2024-06-02T21:15:30.123',
+  });
+
+  const result = analyzeText({
+    description,
+    fileName: 'VRChat_2024-06-02_21-15-30.123_1920x1080.png',
+  });
+  assert.deepEqual(result.players, [
+    { id: friend, displayName: 'Alice' },
+    { id: stranger, displayName: 'Bob' },
+  ]);
 });
 
 test('VRChat filename is used when there is no metadata', () => {

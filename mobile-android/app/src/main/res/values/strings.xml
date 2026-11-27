@@ -22,6 +22,15 @@
     <string name="loading_page">正在加载时光轴…</string>
     <string name="save_started">正在保存到手机…</string>
     <string name="scan_prompt">扫描电脑上的手机同步二维码</string>
+    <string name="discovered_title">附近的电脑 / 最近连接</string>
+    <string name="discovering">正在寻找同一 Wi-Fi 下的电脑…</string>
+    <string name="discovered_none">暂未发现电脑，可继续扫码或手动输入地址。</string>
+    <string name="discovered_paired">已配对 · 点按重连</string>
+    <string name="discovered_new">点按填入地址，首次连接需扫码</string>
+    <string name="discovered_found">找到 %1$d 台电脑</string>
+    <string name="saved_remove_hint">长按可移除这个配对记录</string>
+    <string name="saved_removed">已移除这个配对记录</string>
+    <string name="pair_first">首次连接请扫描电脑上的二维码</string>
     <string name="session_title">时间轴纪念相册</string>
     <string name="session_reload">刷新页面</string>
     <string name="session_reload_local">刷新本地相册</string>
@@ -29,5 +38,12 @@
     <string name="session_local">返回本地相册</string>
     <string name="session_connect">连接电脑（可选）</string>
     <string name="session_exit">退出应用</string>
+    <string name="lock_title">相册已锁定</string>
+    <string name="lock_hint">验证设备锁屏密码后查看本地相册</string>
+    <string name="unlock">解锁相册</string>
+    <string name="lock_no_device">设备未设置锁屏密码，无法启用相册锁</string>
+    <string name="widget_description">显示往年今天的回忆照片</string>
+    <string name="widget_empty_title">打开相册，看看今天的回忆</string>
+    <string name="widget_empty_subtitle">时光轴纪念相册</string>
     <string name="back_local">返回本地相册</string>
 </resources>

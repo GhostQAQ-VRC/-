@@ -14,6 +14,8 @@ import type {
   WorldLibraryEntry,
 } from '../types';
 import { getDesktopBridge, mediaUrl } from '../platform';
+import { deleteManagedPhotoFiles } from '../mobile/managedActions';
+import { normalizePlayerIds } from '../utils/players';
 import {
   createId,
   createInitialAlbum,
@@ -56,6 +58,7 @@ export interface AlbumApi {
   initiallyCorrupted: boolean;
   addPhoto: (draft: PhotoDraft) => Photo;
   updatePhoto: (id: string, patch: Partial<Photo>) => void;
+  updatePhotos: (ids: string[], patch: PhotoBulkPatch) => void;
   deletePhoto: (id: string) => void;
   deletePhotos: (ids: string[]) => void;
   detachWorldFromPhotos: (ids: string[]) => void;
@@ -169,6 +172,85 @@ function snapshotWorld(entry: WorldLibraryEntry): WorldInfo {
 function lookupStateFor(world: WorldInfo | null): Photo['worldLookup'] {
   if (!world) return 'none';
   return world.source === 'manual' ? 'manual' : 'resolved';
+}
+
+export interface PhotoBulkPatch {
+  /** `undefined` = keep, `null` = clear, otherwise a WorldLibraryEntry key. */
+  worldKey?: string | null;
+  capturedAt?: string;
+  noteAppend?: string;
+  tagsAdd?: string[];
+  tagsClear?: boolean;
+  favorite?: boolean;
+}
+
+export function normalizePhotoTag(value: string): string {
+  return String(value || '')
+    .replace(/[,\n\r\t]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 24);
+}
+
+export function normalizePhotoTags(values: unknown): string[] {
+  if (!Array.isArray(values)) return [];
+  const tags: string[] = [];
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const tag = normalizePhotoTag(value);
+    if (tag && !tags.includes(tag)) tags.push(tag);
+    if (tags.length >= 20) break;
+  }
+  return tags;
+}
+
+export function applyPhotoBulkPatch(
+  photo: Photo,
+  patch: PhotoBulkPatch,
+  worldEntry?: WorldLibraryEntry | null,
+): Photo {
+  const next: Photo = { ...photo };
+
+  if (patch.worldKey !== undefined) {
+    if (!patch.worldKey || !worldEntry) {
+      next.world = null;
+      next.worldId = undefined;
+      next.worldRef = undefined;
+      next.worldLookup = 'none';
+    } else {
+      next.world = snapshotWorld(worldEntry);
+      next.worldId = worldEntry.id || undefined;
+      next.worldRef = worldEntry.key;
+      next.worldLookup = lookupStateFor(next.world);
+    }
+  }
+
+  if (patch.capturedAt) {
+    const parsed = Date.parse(patch.capturedAt);
+    if (!Number.isNaN(parsed)) next.capturedAt = new Date(parsed).toISOString();
+  }
+
+  const append = patch.noteAppend ? patch.noteAppend.trim() : '';
+  if (append) {
+    const base = next.note.trim();
+    next.note = (base ? `${base}\n${append}` : append).slice(0, 240);
+  }
+
+  if (patch.tagsClear || patch.tagsAdd) {
+    let tags = patch.tagsClear ? [] : normalizePhotoTags(next.tags);
+    if (patch.tagsAdd) {
+      for (const value of patch.tagsAdd) {
+        const tag = normalizePhotoTag(value);
+        if (tag && !tags.includes(tag) && tags.length < 20) tags.push(tag);
+      }
+    }
+    next.tags = tags.length ? tags : undefined;
+  }
+
+  if (typeof patch.favorite === 'boolean') {
+    next.favorite = patch.favorite ? true : undefined;
+  }
+  return next;
 }
 
 /**
@@ -306,6 +388,7 @@ export function useAlbum(): AlbumApi {
         )
       : undefined;
     const world = libraryMatch ? snapshotWorld(libraryMatch) : (draft.world ?? null);
+    const draftPlayerIds = normalizePlayerIds((draft.players || []).map((player) => player.id));
     const photo: Photo = {
       id: createId('photo'),
       src: draft.src,
@@ -330,6 +413,7 @@ export function useAlbum(): AlbumApi {
       metaSource: draft.metaSource,
       worldInstanceId: draft.worldInstanceId,
       managedCopy: draft.managedCopy,
+      playerIds: draftPlayerIds.length ? draftPlayerIds : undefined,
       syncState: draft.libraryPath ? 'local' : undefined,
     };
     setData((prev) => {
@@ -364,6 +448,17 @@ export function useAlbum(): AlbumApi {
       if (!target) return prev;
       let worlds = prev.worlds;
       const next: Photo = { ...target, ...patch };
+      if (patch.tags !== undefined) {
+        const tags = normalizePhotoTags(patch.tags);
+        next.tags = tags.length ? tags : undefined;
+      }
+      if (patch.favorite !== undefined) {
+        next.favorite = patch.favorite === true ? true : undefined;
+      }
+      if (patch.playerIds !== undefined) {
+        const playerIds = normalizePlayerIds(patch.playerIds);
+        next.playerIds = playerIds.length ? playerIds : undefined;
+      }
 
       if (patch.world !== undefined) {
         if (patch.world === null) {
@@ -422,9 +517,51 @@ export function useAlbum(): AlbumApi {
     });
   }, []);
 
+  const updatePhotos = useCallback((ids: string[], patch: PhotoBulkPatch) => {
+    const idSet = new Set(ids);
+    if (idSet.size === 0) return;
+    setData((prev) => {
+      let worlds = prev.worlds;
+      let worldEntry: WorldLibraryEntry | null = null;
+      if (patch.worldKey) {
+        worldEntry = worlds.find((entry) => entry.key === patch.worldKey) || null;
+      }
+      const photos = prev.photos.map((photo) =>
+        idSet.has(photo.id) ? applyPhotoBulkPatch(photo, patch, worldEntry) : photo,
+      );
+      const changes: string[] = [];
+      if (patch.worldKey !== undefined) {
+        changes.push(patch.worldKey ? '世界' : '世界关联');
+      }
+      if (patch.capturedAt) changes.push('拍摄时间');
+      if (patch.noteAppend) changes.push('备注');
+      if (patch.tagsAdd?.length || patch.tagsClear) changes.push('标签');
+      if (patch.favorite !== undefined) changes.push('收藏');
+      return {
+        ...prev,
+        photos,
+        worlds,
+        activity: pushActivity(
+          prev.activity,
+          makeActivity(
+            'photo.bulk',
+            `批量更新了 ${idSet.size} 张照片${changes.length ? `（${changes.join('、')}）` : ''}`,
+          ),
+        ),
+        updatedAt: nowIso(),
+      };
+    });
+  }, []);
+
   const deletePhoto = useCallback((id: string) => {
     const target = dataRef.current.photos.find((photo) => photo.id === id);
-    if (target) ignoreLibraryHashes([target]);
+    if (target) {
+      ignoreLibraryHashes([target]);
+      deleteManagedPhotoFiles(
+        [target],
+        dataRef.current.photos.filter((photo) => photo.id !== id),
+      );
+    }
     setData((prev) => {
       const target = prev.photos.find((photo) => photo.id === id);
       if (!target) return prev;
@@ -445,7 +582,10 @@ export function useAlbum(): AlbumApi {
   const deletePhotos = useCallback((ids: string[]) => {
     const idSet = new Set(ids);
     if (idSet.size === 0) return;
-    ignoreLibraryHashes(dataRef.current.photos.filter((photo) => idSet.has(photo.id)));
+    const removed = dataRef.current.photos.filter((photo) => idSet.has(photo.id));
+    const remaining = dataRef.current.photos.filter((photo) => !idSet.has(photo.id));
+    ignoreLibraryHashes(removed);
+    deleteManagedPhotoFiles(removed, remaining);
     setData((prev) => {
       const photos = prev.photos.filter((photo) => !idSet.has(photo.id));
       return {
@@ -831,6 +971,9 @@ export function useAlbum(): AlbumApi {
         const entry = ensureWorld(seed);
         const worldSnapshot = entry ? snapshotWorld(entry) : null;
         const previewSrc = seed.previewPath ? mediaUrl('preview', seed.previewPath) : '';
+        const seedPlayerIds = normalizePlayerIds(
+          (seed.players || []).map((player) => player.id),
+        );
         const existingIndex = indexByHash.get(seed.contentHash);
 
         if (existingIndex !== undefined) {
@@ -863,6 +1006,11 @@ export function useAlbum(): AlbumApi {
                   worldInstanceId: seed.worldInstanceId,
                 }
               : {}),
+            // Only backfill VRCX player tags when the photo has none yet, so
+            // a curator removing one is not undone by every rescan.
+            ...(previous.playerIds?.length || seedPlayerIds.length === 0
+              ? {}
+              : { playerIds: seedPlayerIds }),
           };
           updated += 1;
           continue;
@@ -891,6 +1039,7 @@ export function useAlbum(): AlbumApi {
           contentHash: seed.contentHash,
           metaSource: seed.metaSource,
           worldInstanceId: seed.worldInstanceId,
+          playerIds: seedPlayerIds.length ? seedPlayerIds : undefined,
           syncState: 'local',
         });
         indexByHash.set(seed.contentHash, photos.length - 1);
@@ -1100,6 +1249,7 @@ export function useAlbum(): AlbumApi {
     initiallyCorrupted: initial.current.corrupted,
     addPhoto,
     updatePhoto,
+    updatePhotos,
     deletePhoto,
     deletePhotos,
     detachWorldFromPhotos,

@@ -1,23 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
+  CalendarClock,
   Check,
   CheckCircle2,
   Database,
   Download,
   FileUp,
   FlaskConical,
+  FolderOpen,
   Globe2,
   KeyRound,
   LayoutTemplate,
   Palette,
   Loader2,
   Lock,
+  Play,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
   Sparkles,
   Trash2,
-  AlertTriangle,
 } from 'lucide-react';
 import type { AlbumApi } from '../hooks/useAlbum';
 import type { AdminAuthApi } from '../hooks/useAdminAuth';
@@ -39,7 +42,7 @@ import {
 import { DEMO_LOOKUP_HINT, lookupWorld } from '../services/worldService';
 import { useToast } from '../hooks/useToast';
 import { useDesktopLibrary } from '../hooks/useDesktopLibrary';
-import { getDesktopBridge } from '../platform';
+import { getDesktopBridge, type DesktopPreferences, type DesktopAutoBackupView } from '../platform';
 import { isMobileRuntime } from '../platform/mobileRuntime';
 import { backupFilename, downloadTextFile } from '../utils/download';
 import { formatDateShort } from '../utils/date';
@@ -88,7 +91,55 @@ export function SettingsPage({ album, auth }: SettingsPageProps) {
   const [importMode, setImportMode] = useState<ImportMode>('replace');
   const [importError, setImportError] = useState('');
   const [danger, setDanger] = useState<DangerAction>(null);
+  const [desktopPrefs, setDesktopPrefs] = useState<DesktopPreferences | null>(null);
+  const [autoBackup, setAutoBackup] = useState<DesktopAutoBackupView | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [prefsBusy, setPrefsBusy] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!desktop || mobile || typeof desktop.app.getPreferences !== 'function') {
+      setDesktopPrefs(null);
+      return undefined;
+    }
+    let alive = true;
+    void desktop.app
+      .getPreferences()
+      .then((preferences) => {
+        if (alive) setDesktopPrefs(preferences);
+      })
+      .catch(() => {
+        if (alive) setDesktopPrefs(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [desktop, mobile]);
+
+  useEffect(() => {
+    if (!desktop || mobile || typeof desktop.backup.getAutoConfig !== 'function') {
+      setAutoBackup(null);
+      return undefined;
+    }
+    let alive = true;
+    const apply = (status: DesktopAutoBackupView) => {
+      if (alive) setAutoBackup(status);
+    };
+    void desktop.backup
+      .getAutoConfig()
+      .then(apply)
+      .catch(() => {
+        if (alive) setAutoBackup(null);
+      });
+    const unsubscribe =
+      typeof desktop.backup.onAutoStatus === 'function'
+        ? desktop.backup.onAutoStatus(apply)
+        : () => {};
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, [desktop, mobile]);
 
   useEffect(() => {
     setSiteName(album.settings.siteName);
@@ -389,6 +440,109 @@ export function SettingsPage({ album, auth }: SettingsPageProps) {
       setPassError((caught as Error).message || '更新口令失败。');
     } finally {
       setPassBusy(false);
+    }
+  };
+
+  const updateDesktopPrefs = async (patch: Partial<DesktopPreferences>) => {
+    if (!desktop || prefsBusy) return;
+    setPrefsBusy(true);
+    try {
+      const result = await desktop.app.setPreferences(patch);
+      setDesktopPrefs(result.preferences);
+      pushToast({ tone: 'success', title: '应用行为已更新' });
+    } catch (caught) {
+      pushToast({
+        tone: 'danger',
+        title: '设置失败',
+        description: (caught as Error).message || '请重试。',
+      });
+    } finally {
+      setPrefsBusy(false);
+    }
+  };
+
+  const updateAutoBackup = async (patch: {
+    enabled?: boolean;
+    intervalDays?: number;
+    kind?: 'metadata' | 'full';
+    retention?: number;
+  }) => {
+    if (!desktop || autoBusy) return;
+    setAutoBusy(true);
+    try {
+      const result = await desktop.backup.setAutoConfig(patch);
+      setAutoBackup(result.config);
+      if (result.ok) {
+        pushToast({ tone: 'success', title: '自动备份设置已更新' });
+      } else {
+        pushToast({
+          tone: 'danger',
+          title: '无法更新自动备份',
+          description: result.error || '请检查备份文件夹。',
+        });
+      }
+    } catch (caught) {
+      pushToast({
+        tone: 'danger',
+        title: '设置失败',
+        description: (caught as Error).message || '请重试。',
+      });
+    } finally {
+      setAutoBusy(false);
+    }
+  };
+
+  const chooseAutoBackupFolder = async () => {
+    if (!desktop || autoBusy) return;
+    setAutoBusy(true);
+    try {
+      const result = await desktop.backup.chooseAutoFolder();
+      setAutoBackup(result.config);
+      if (!result.ok && !result.canceled) {
+        pushToast({
+          tone: 'danger',
+          title: '无法使用这个文件夹',
+          description: result.error || '请选择一个存储库之外的位置。',
+        });
+      }
+    } catch (caught) {
+      pushToast({
+        tone: 'danger',
+        title: '选择文件夹失败',
+        description: (caught as Error).message || '请重试。',
+      });
+    } finally {
+      setAutoBusy(false);
+    }
+  };
+
+  const runAutoBackupNow = async () => {
+    if (!desktop || autoBusy) return;
+    setAutoBusy(true);
+    try {
+      const result = await desktop.backup.runAutoNow();
+      setAutoBackup(result.config);
+      if (result.ok) {
+        pushToast({
+          tone: 'success',
+          title: '自动备份已完成',
+          description: `${formatBytes(result.bytes || 0)} · ${result.path || ''}`,
+        });
+      } else {
+        pushToast({
+          tone: 'danger',
+          title: '自动备份失败',
+          description: result.error || '请检查备份文件夹。',
+        });
+      }
+    } catch (caught) {
+      pushToast({
+        tone: 'danger',
+        title: '自动备份失败',
+        description: (caught as Error).message || '请重试。',
+      });
+    } finally {
+      setAutoBusy(false);
     }
   };
 
@@ -794,6 +948,41 @@ export function SettingsPage({ album, auth }: SettingsPageProps) {
 
         {mobile ? null : <NetworkPanel />}
 
+        {desktop && !mobile && desktopPrefs ? (
+          <AdminPanel kicker="DESKTOP" title="应用行为">
+            <div className="admin-form">
+              <label className="library-panel__checkbox">
+                <input
+                  type="checkbox"
+                  checked={desktopPrefs.closeToTray}
+                  onChange={(event) =>
+                    void updateDesktopPrefs({ closeToTray: event.target.checked })
+                  }
+                  disabled={prefsBusy}
+                />
+                <span>关闭窗口时最小化到托盘</span>
+              </label>
+              <p className="field-hint">
+                关闭窗口后，手机同步、自动导入与投送仍在后台运行；从托盘菜单选择「退出」才会完全退出。
+              </p>
+              <label className="library-panel__checkbox">
+                <input
+                  type="checkbox"
+                  checked={desktopPrefs.launchAtLogin}
+                  onChange={(event) =>
+                    void updateDesktopPrefs({ launchAtLogin: event.target.checked })
+                  }
+                  disabled={prefsBusy}
+                />
+                <span>开机自动启动</span>
+              </label>
+              <p className="field-hint">
+                仅打包后的 Windows 桌面客户端生效；开发模式不会注册启动项。
+              </p>
+            </div>
+          </AdminPanel>
+        ) : null}
+
         <AdminPanel kicker="DATA & BACKUP" title="数据与备份">
           <div className="admin-data-summary">
             <DataMini photos={album.photos.length} worlds={album.worlds.length} />
@@ -837,6 +1026,147 @@ export function SettingsPage({ album, auth }: SettingsPageProps) {
               网页备份中的内嵌图片会写入当前存储库；完整库 ZIP 会恢复到指定文件夹并重新加载。
             </p>
           ) : null}
+
+          {desktop && !mobile && autoBackup ? (
+            <div className="auto-backup">
+              <div className="auto-backup__head">
+                <div>
+                  <p className="field-label auto-backup__title">
+                    <CalendarClock size={14} aria-hidden="true" />
+                    自动备份计划
+                  </p>
+                  <p className="field-hint">
+                    按计划静默导出到独立文件夹，只保留最近 {autoBackup.retention} 份；不会写入存储库或把旧备份再次打包。
+                  </p>
+                </div>
+                <label className="library-panel__checkbox auto-backup__toggle">
+                  <input
+                    type="checkbox"
+                    checked={autoBackup.enabled}
+                    onChange={(event) =>
+                      void updateAutoBackup({ enabled: event.target.checked })
+                    }
+                    disabled={autoBusy}
+                  />
+                  <span>{autoBackup.enabled ? '已启用' : '已关闭'}</span>
+                </label>
+              </div>
+
+              <div className="auto-backup__grid">
+                <div className="field">
+                  <label className="field-label" htmlFor="auto-backup-interval">
+                    备份频率
+                  </label>
+                  <select
+                    id="auto-backup-interval"
+                    className="admin-select"
+                    value={autoBackup.intervalDays}
+                    onChange={(event) =>
+                      void updateAutoBackup({ intervalDays: Number(event.target.value) })
+                    }
+                    disabled={autoBusy}
+                  >
+                    <option value={1}>每天</option>
+                    <option value={3}>每 3 天</option>
+                    <option value={7}>每周</option>
+                    <option value={14}>每两周</option>
+                    <option value={30}>每 30 天</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor="auto-backup-kind">
+                    备份内容
+                  </label>
+                  <select
+                    id="auto-backup-kind"
+                    className="admin-select"
+                    value={autoBackup.kind}
+                    onChange={(event) =>
+                      void updateAutoBackup({
+                        kind: event.target.value === 'full' ? 'full' : 'metadata',
+                      })
+                    }
+                    disabled={autoBusy}
+                  >
+                    <option value="metadata">仅元数据 JSON（快）</option>
+                    <option value="full">完整库 ZIP（原图+预览）</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor="auto-backup-retention">
+                    保留份数
+                  </label>
+                  <select
+                    id="auto-backup-retention"
+                    className="admin-select"
+                    value={autoBackup.retention}
+                    onChange={(event) =>
+                      void updateAutoBackup({ retention: Number(event.target.value) })
+                    }
+                    disabled={autoBusy}
+                  >
+                    <option value={2}>2 份</option>
+                    <option value={3}>3 份</option>
+                    <option value={5}>5 份</option>
+                    <option value={10}>10 份</option>
+                    <option value={20}>20 份</option>
+                  </select>
+                </div>
+              </div>
+
+              <p className="auto-backup__path" title={autoBackup.effectiveFolder}>
+                <FolderOpen size={13} aria-hidden="true" />
+                <span>
+                  {autoBackup.effectiveFolder || '尚未选择备份位置'}
+                  {autoBackup.usingDefaultFolder ? '（默认位置）' : ''}
+                </span>
+              </p>
+
+              <div className="auto-backup__actions">
+                <button
+                  type="button"
+                  className="button button--soft button--small"
+                  onClick={() => void chooseAutoBackupFolder()}
+                  disabled={autoBusy}
+                >
+                  <FolderOpen size={14} aria-hidden="true" />
+                  更改位置
+                </button>
+                <button
+                  type="button"
+                  className="button button--ghost button--small"
+                  onClick={() => void runAutoBackupNow()}
+                  disabled={autoBusy || autoBackup.running}
+                >
+                  {autoBackup.running ? (
+                    <Loader2 size={14} className="spinner" aria-hidden="true" />
+                  ) : (
+                    <Play size={14} aria-hidden="true" />
+                  )}
+                  {autoBackup.running ? '备份中…' : '立即备份'}
+                </button>
+              </div>
+
+              <p className="auto-backup__status">
+                <span>
+                  上次：{autoBackup.lastRunAt ? formatAdminDate(autoBackup.lastRunAt) : '尚未运行'}
+                </span>
+                <span>
+                  {autoBackup.enabled
+                    ? autoBackup.nextRunAt
+                      ? `下次：${formatAdminDate(autoBackup.nextRunAt)}`
+                      : '启用后将自动执行首次备份'
+                    : '计划已暂停'}
+                </span>
+              </p>
+              {autoBackup.lastError ? (
+                <p className="field-error" role="alert">
+                  {autoBackup.lastError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <input
             ref={importInput}
             type="file"

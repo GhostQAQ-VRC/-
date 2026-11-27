@@ -6,8 +6,11 @@ const fsp = require('node:fs/promises');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+const sharp = require('sharp');
 const { test } = require('node:test');
 
+const repository = require('../../library/repository.cjs');
+const ingest = require('../../library/ingest.cjs');
 const {
   MobileSyncService,
   buildMobileAlbum,
@@ -476,6 +479,30 @@ test('disconnecting one device leaves other paired phones connected', async () =
   }
 });
 
+test('discovery beacon never carries the pairing token or library paths', () => {
+  const service = new MobileSyncService({
+    distDir: '.',
+    getRoot: () => null,
+    getAlbum: () => null,
+    getPreviewDir: () => null,
+    getSettings: () => ({}),
+    updateSettings: async () => {},
+    version: '9.9.9',
+  });
+  service.token = 'super-secret-pairing-token';
+  service.port = 12345;
+  service.libraryName = '测试库';
+  const payload = service.beaconPayload();
+  assert.equal(payload.app, 'hoshikuzu-album');
+  assert.equal(payload.version, '9.9.9');
+  assert.equal(payload.name, '测试库');
+  assert.equal(payload.port, 12345);
+  const text = JSON.stringify(payload);
+  assert.ok(!text.includes('super-secret-pairing-token'));
+  assert.ok(!text.includes('libraryPath'));
+  assert.ok(!text.includes('token'));
+});
+
 test('token never authenticates through the URL query string', async () => {
   const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-mobile-tok-'));
   const dist = path.join(temp, 'dist');
@@ -512,6 +539,97 @@ test('token never authenticates through the URL query string', async () => {
     assert.equal(leave.status, 200);
     const after = await request(service, '/api/mobile/album', { headers: { Cookie: cookies } });
     assert.equal(after.status, 401);
+  } finally {
+    await service.stop({ silent: true });
+    await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('phone upload imports, dedupes and rejects disguised files', async () => {
+  const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'hoshikuzu-mobile-upload-'));
+  const dist = path.join(temp, 'dist');
+  const root = path.join(temp, 'library');
+  await fsp.mkdir(dist, { recursive: true });
+  await fsp.writeFile(path.join(dist, 'index.html'), '<!doctype html><html><body>phone</body></html>');
+  await repository.ensureLibrary(root, { name: '上传测试库' });
+
+  const imported = [];
+  const service = new MobileSyncService({
+    distDir: dist,
+    getRoot: () => root,
+    getAlbum: async () => (await repository.readLibrary(root))?.album ?? null,
+    getPreviewDir: (libraryRoot) => path.join(libraryRoot, '缩略图缓存'),
+    getPreviewMaxEdge: async () => 800,
+    importReceived: (libraryRoot, tempPath, name, maxEdge) =>
+      ingest.importReceivedFile(libraryRoot, tempPath, name, { previewMaxEdge: maxEdge }),
+    onImported: (draft) => imported.push(draft),
+    getSettings: () => ({ enabled: true, port: 0, preferredIp: '', receiveMode: 'stream' }),
+    updateSettings: async () => {},
+  });
+
+  try {
+    assert.equal((await service.start({ port: 0 })).ok, true);
+    const pair = await request(service, `/m/${service.token}`);
+    const cookies = cookieHeaderFrom(pair);
+    assert.match(cookies, /hoshikuzu_mobile=/);
+
+    const png = await sharp({
+      create: { width: 32, height: 24, channels: 3, background: '#3366aa' },
+    })
+      .png()
+      .toBuffer();
+
+    const unsigned = await request(service, '/api/mobile/upload?name=phone.png', {
+      method: 'POST',
+      headers: { 'content-length': String(png.length), 'content-type': 'application/octet-stream' },
+      body: png,
+    });
+    assert.equal(unsigned.status, 401);
+
+    const first = await request(service, '/api/mobile/upload?name=phone.png', {
+      method: 'POST',
+      headers: {
+        Cookie: cookies,
+        'content-length': String(png.length),
+        'content-type': 'application/octet-stream',
+      },
+      body: png,
+    });
+    assert.equal(first.status, 200);
+    const firstJson = JSON.parse(first.body.toString());
+    assert.equal(firstJson.ok, true);
+    assert.equal(firstJson.duplicate, false);
+    assert.ok(firstJson.draft?.libraryPath?.startsWith('_inbox/transfer/'));
+    assert.equal(imported.length, 1);
+    const importedFile = path.join(root, firstJson.draft.libraryPath);
+    assert.ok((await fsp.stat(importedFile)).size > 0);
+
+    const second = await request(service, '/api/mobile/upload?name=phone.png', {
+      method: 'POST',
+      headers: {
+        Cookie: cookies,
+        'content-length': String(png.length),
+        'content-type': 'application/octet-stream',
+      },
+      body: png,
+    });
+    assert.equal(second.status, 200);
+    assert.equal(JSON.parse(second.body.toString()).duplicate, true);
+    assert.equal(imported.length, 1);
+
+    const disguised = Buffer.from('MZ\x90\x00\x03\x00\x00\x00', 'latin1');
+    const rejected = await request(service, '/api/mobile/upload?name=evil.png', {
+      method: 'POST',
+      headers: {
+        Cookie: cookies,
+        'content-length': String(disguised.length),
+        'content-type': 'application/octet-stream',
+      },
+      body: disguised,
+    });
+    assert.equal(rejected.status, 400);
+    assert.match(JSON.parse(rejected.body.toString()).error, /格式|伪装/);
+    assert.equal(imported.length, 1);
   } finally {
     await service.stop({ silent: true });
     await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});

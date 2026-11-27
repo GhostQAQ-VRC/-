@@ -11,6 +11,8 @@ import { AdminShell } from './AdminShell';
 import { DashboardPage } from './DashboardPage';
 import { PhotosPage } from './PhotosPage';
 import { WorldsPage } from './WorldsPage';
+import { JourneyPage } from './JourneyPage';
+import { PlayersPage } from './PlayersPage';
 import { SettingsPage } from './SettingsPage';
 import { AdvancedSettingsPage } from './advanced/AdvancedSettingsPage';
 import { ActivityPage } from './ActivityPage';
@@ -27,6 +29,8 @@ const PAGE_META: Record<string, { title: string; kicker: string }> = {
   '/admin': { title: '概览', kicker: 'OVERVIEW' },
   '/admin/photos': { title: '照片管理', kicker: 'PHOTOS' },
   '/admin/worlds': { title: '世界资料库', kicker: 'WORLDS' },
+  '/admin/journey': { title: '世界旅程', kicker: 'JOURNEY' },
+  '/admin/players': { title: '玩家列表', kicker: 'PLAYERS' },
   '/admin/settings': { title: '站点设置', kicker: 'SETTINGS' },
   '/admin/sync': { title: '云同步', kicker: 'CLOUD SYNC' },
   '/admin/mobile': { title: '手机同步', kicker: 'MOBILE LINK' },
@@ -80,6 +84,10 @@ export function AdminApp({ album, route, navigate }: AdminAppProps) {
     );
   } else if (route === '/admin/worlds') {
     page = <WorldsPage album={album} />;
+  } else if (route === '/admin/journey') {
+    page = <JourneyPage album={album} />;
+  } else if (route === '/admin/players') {
+    page = <PlayersPage album={album} navigate={navigate} />;
   } else if (route === '/admin/settings') {
     page = <SettingsPage album={album} auth={auth} />;
   } else if (route === '/admin/sync') {

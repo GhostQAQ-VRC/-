@@ -32,6 +32,16 @@ function createNetworkService(options = {}) {
   const client = new VRChatService({
     getConfig: () => config.readConfigSync(),
   });
+  const notifyLogin = (result) => {
+    if (!result?.ok || typeof options.onVRChatLogin !== 'function') return;
+    try {
+      void Promise.resolve(options.onVRChatLogin(result)).catch((error) => {
+        console.error('[vrchat] post-login hook failed', error.message);
+      });
+    } catch (error) {
+      console.error('[vrchat] post-login hook failed', error.message);
+    }
+  };
 
   function register() {
     ipcMain.handle('network:get-config', () => networkConfigView());
@@ -131,11 +141,13 @@ function createNetworkService(options = {}) {
           // Remembering the password is optional; the cookie jar still works.
         }
       }
+      notifyLogin(result);
       return { ...result, config: vrchatView() };
     });
 
     ipcMain.handle('vrchat:verify-2fa', async (_event, payload) => {
       const result = await client.verify2fa(payload?.code, payload?.method);
+      notifyLogin(result);
       return { ...result, config: vrchatView() };
     });
 

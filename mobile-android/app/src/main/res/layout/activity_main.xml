@@ -93,6 +93,40 @@
                 android:textSize="14sp" />
 
             <LinearLayout
+                android:id="@+id/discovered_section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.12"
+                    android:text="@string/discovered_title"
+                    android:textColor="@color/sakura"
+                    android:textSize="9.5sp" />
+
+                <LinearLayout
+                    android:id="@+id/discovered_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/discovered_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:lineSpacingExtra="2dp"
+                    android:text="@string/discovering"
+                    android:textColor="@color/faint"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="22dp"
@@ -318,5 +352,60 @@
             android:text="@string/loading_connect"
             android:textColor="@color/muted"
             android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/lock_layer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_app"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingStart="28dp"
+        android:paddingEnd="28dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            android:contentDescription="@string/app_name"
+            android:src="@mipmap/ic_launcher" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:fontFamily="serif"
+            android:letterSpacing="0.04"
+            android:text="@string/lock_title"
+            android:textColor="@color/ink"
+            android:textSize="26sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:lineSpacingExtra="3dp"
+            android:text="@string/lock_hint"
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/unlock_button"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="24dp"
+            android:background="@drawable/bg_primary"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:minHeight="0dp"
+            android:stateListAnimator="@null"
+            android:text="@string/unlock"
+            android:textAllCaps="false"
+            android:textColor="@color/button_ink"
+            android:textSize="14sp" />
     </LinearLayout>
 </FrameLayout>

@@ -4,8 +4,10 @@ const {
   app,
   BrowserWindow,
   Menu,
+  Tray,
   dialog,
   ipcMain,
+  nativeImage,
   protocol,
   screen,
   shell,
@@ -29,6 +31,13 @@ const { createSyncService } = require('./services/sync.cjs');
 const { createNetworkService } = require('./ipc/network.cjs');
 const { createUpdateService } = require('./ipc/update.cjs');
 const { createMobileService } = require('./ipc/mobile.cjs');
+const { createAutoImportService } = require('./ipc/auto-import.cjs');
+const { createDuplicateService } = require('./ipc/duplicates.cjs');
+const { createHealthService } = require('./ipc/health.cjs');
+const { createWallpaperService } = require('./ipc/wallpaper.cjs');
+const { createAutoBackupService } = require('./ipc/auto-backup.cjs');
+const { createYearReviewService } = require('./ipc/year-review.cjs');
+const { createPlayersService } = require('./ipc/players.cjs');
 
 const isSmoke = process.env.HOSHIKUZU_SMOKE === '1';
 const smokeNoLibrary = process.env.HOSHIKUZU_SMOKE_NO_LIBRARY === '1';
@@ -74,6 +83,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow = null;
+let tray = null;
 let currentLibraryRoot = null;
 let currentPreviewDir = null;
 let previewQueue = null;
@@ -87,6 +97,13 @@ let syncService = null;
 let networkService = null;
 let updateService = null;
 let mobileService = null;
+let autoImportService = null;
+let duplicateService = null;
+let healthService = null;
+let wallpaperService = null;
+let autoBackupService = null;
+let yearReviewService = null;
+let playersService = null;
 let sampleTempDir = null;
 let previewReadyBuffer = [];
 let previewReadyTimer = null;
@@ -434,6 +451,23 @@ function registerProtocols() {
       );
     }
 
+    if (kind === 'player') {
+      const parts = relative.split('/');
+      if (
+        parts.length !== 2 ||
+        parts[0] !== 'avatars' ||
+        !/^[a-f0-9]{40}\.webp$/.test(parts[1])
+      ) {
+        return new Response('Invalid player avatar', { status: 400 });
+      }
+      const absolute = await repository.resolveRealInside(
+        root,
+        `${constants.CACHE_DIR}/players/avatars/${parts[1]}`,
+      );
+      if (!absolute) return new Response('Forbidden', { status: 403 });
+      return serveFile(request, absolute, { immutable: true });
+    }
+
     if (kind === 'original') {
       // Resolve symlinks too: a link planted inside the library must not make
       // the renderer read a file outside the library root.
@@ -467,6 +501,9 @@ function restoreWindowOptions(cfg) {
       sandbox: true,
       webSecurity: true,
       spellcheck: false,
+      // Keep album saves / import events flowing while the window sits in the
+      // tray; the mobile sync and auto-import services depend on the renderer.
+      backgroundThrottling: false,
     },
   };
 
@@ -512,10 +549,102 @@ function trackWindowState(win) {
   win.on('unmaximize', persist);
 }
 
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    void createWindow().catch((error) => {
+      console.error('[desktop] show window failed', error);
+    });
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function applyLoginItemSettings(settings) {
+  if (!app.isPackaged) return;
+  if (process.platform !== 'win32' && process.platform !== 'darwin') return;
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: settings && settings.launchAtLogin === true,
+      args: [],
+    });
+  } catch (error) {
+    console.error('[desktop] login item update failed', error.message);
+  }
+}
+
+function createTray() {
+  if (tray) return;
+  let icon = nativeImage.createFromPath(path.join(DIST_DIR, 'tray-icon.png'));
+  if (icon.isEmpty()) {
+    icon = nativeImage.createFromPath(
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'dist', 'tray-icon.png'),
+    );
+  }
+  if (icon.isEmpty()) {
+    icon = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon-256.png'));
+  }
+  if (icon.isEmpty()) {
+    console.warn('[desktop] tray icon missing; tray disabled');
+    return;
+  }
+  tray = new Tray(icon);
+  tray.setToolTip(PROGRAM_NAME);
+  console.log('[desktop] tray ready');
+  const template = [
+    { label: '显示主窗口', click: () => showMainWindow() },
+    { type: 'separator' },
+    {
+      label: '扫描存储库',
+      click: () => {
+        showMainWindow();
+        sendCommand('scan-library');
+      },
+    },
+    {
+      label: '导入照片…',
+      click: () => {
+        showMainWindow();
+        setTimeout(() => sendCommand('import-photos'), 250);
+      },
+    },
+    {
+      label: '打开设置',
+      click: () => {
+        showMainWindow();
+        setTimeout(() => sendCommand('open-settings'), 200);
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ];
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+  tray.on('click', () => showMainWindow());
+  tray.on('double-click', () => showMainWindow());
+}
+
 async function createWindow() {
   const cfg = await config.readConfig();
   mainWindow = new BrowserWindow(restoreWindowOptions(cfg));
   trackWindowState(mainWindow);
+
+  mainWindow.on('close', (event) => {
+    if (quitting || isSmoke) return;
+    const behavior = config.readConfigSync().desktop || {};
+    if (behavior.closeToTray === false) return;
+    event.preventDefault();
+    mainWindow.hide();
+  });
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 
   const emitMaximized = () =>
     broadcast('window:maximized-changed', mainWindow ? mainWindow.isMaximized() : false);
@@ -736,9 +865,11 @@ async function importPaths(paths) {
       error: '请先选择存储库，再导入照片。',
     };
   }
-  return ingest.importPaths(root, paths, {
+  const result = await ingest.importPaths(root, paths, {
     previewMaxEdge: await previewMaxEdgeFor(root),
   });
+  await ingestDraftPlayers(result.drafts);
+  return result;
 }
 
 async function importDataUrls(items) {
@@ -746,8 +877,23 @@ async function importDataUrls(items) {
   if (!root) {
     return { ok: false, drafts: [], errors: [], error: '请先选择存储库。' };
   }
-  return ingest.importDataUrls(root, items, {
+  const result = await ingest.importDataUrls(root, items, {
     previewMaxEdge: await previewMaxEdgeFor(root),
+  });
+  await ingestDraftPlayers(result.drafts);
+  return result;
+}
+
+/** VRCX metadata on imported files can introduce players before the photo is
+ * merged; record them without blocking the import on avatar downloads. */
+async function ingestDraftPlayers(drafts) {
+  if (!playersService || !Array.isArray(drafts)) return;
+  const refs = drafts.flatMap((draft) =>
+    Array.isArray(draft.players) ? draft.players : [],
+  );
+  if (!refs.length) return;
+  await playersService.ingestRefs(refs).catch((error) => {
+    console.error('[players] import ingest failed', error.message);
   });
 }
 
@@ -1129,6 +1275,19 @@ function registerIpc() {
             }
           },
         });
+        // VRCX screenshots record who was in the instance. Their profiles are
+        // server-side state, so collect the IDs before the renderer merges the
+        // photo tags.
+        if (playersService && Array.isArray(result.seeds)) {
+          const refs = result.seeds.flatMap((seed) =>
+            Array.isArray(seed.players) ? seed.players : [],
+          );
+          if (refs.length) {
+            await playersService.ingestRefs(refs).catch((error) => {
+              console.error('[players] scan ingest failed', error.message);
+            });
+          }
+        }
         event.sender.send('library:scan-progress', {
           phase: 'done',
           current: result.stats.scanned,
@@ -1467,6 +1626,31 @@ function registerIpc() {
     chrome: process.versions.chrome,
     node: process.versions.node,
   }));
+
+  ipcMain.handle('app:get-preferences', () => {
+    const settings = config.readConfigSync().desktop || {};
+    return {
+      closeToTray: settings.closeToTray !== false,
+      launchAtLogin: settings.launchAtLogin === true,
+    };
+  });
+
+  ipcMain.handle('app:set-preferences', async (_event, patch = {}) => {
+    const current = config.readConfigSync().desktop || {};
+    const next = {
+      closeToTray:
+        patch.closeToTray === undefined
+          ? current.closeToTray !== false
+          : patch.closeToTray === true,
+      launchAtLogin:
+        patch.launchAtLogin === undefined
+          ? current.launchAtLogin === true
+          : patch.launchAtLogin === true,
+    };
+    await config.writeConfig({ desktop: next });
+    applyLoginItemSettings(next);
+    return { ok: true, preferences: next };
+  });
 
   ipcMain.handle('app:open-external', async (_event, url) => {
     if (typeof url === 'string' && /^(https?:|mailto:)/i.test(url)) {
@@ -1963,7 +2147,7 @@ async function runSmokeTest(win) {
   const rotateClick = await win.webContents
     .executeJavaScript(`(() => {
       const card = ${findSidewaysCard};
-      const button = card && card.querySelectorAll('.photo-card__action')[1];
+      const button = card && card.querySelector('.photo-card__action[aria-label*="旋转"]');
       if (!button) return { error: 'rotate action missing' };
       button.click();
       return { ok: true };
@@ -2167,6 +2351,21 @@ async function runSmokeTest(win) {
         el.textContent.includes('视频背景'),
       );
       const hasNetwork = Boolean(document.getElementById('proxy-mode'));
+      const hasAppBehavior = Array.from(document.querySelectorAll('.admin-panel')).some(
+        (el) => el.textContent.includes('应用行为'),
+      );
+      const preferences = await api.app.getPreferences();
+      const prefsSet = await api.app.setPreferences({
+        closeToTray: preferences.closeToTray,
+        launchAtLogin: preferences.launchAtLogin,
+      });
+      const autoBackupPanel = Boolean(document.querySelector('.auto-backup'));
+      const autoBefore = await api.backup.getAutoConfig();
+      const autoSaved = await api.backup.setAutoConfig({ intervalDays: 3, retention: 3 });
+      const autoRestored = await api.backup.setAutoConfig({
+        intervalDays: autoBefore.intervalDays,
+        retention: autoBefore.retention,
+      });
       const before = await api.network.getConfig();
       const saved = await api.network.setProxy({
         mode: 'socks5',
@@ -2194,6 +2393,15 @@ async function runSmokeTest(win) {
       return {
         hasVideo,
         hasNetwork,
+        hasAppBehavior,
+        autoBackupPanel,
+        autoDefaultEnabled: autoBefore.enabled,
+        autoSavedOk: Boolean(autoSaved.ok),
+        autoSavedDays: autoSaved.config ? autoSaved.config.intervalDays : null,
+        autoRestoredOk: Boolean(autoRestored.ok),
+        closeToTray: preferences.closeToTray,
+        launchAtLogin: preferences.launchAtLogin,
+        prefsOk: Boolean(prefsSet && prefsSet.ok),
         saved: saved.ok,
         modes: before.modes.length,
         restored: restored.proxy.mode,
@@ -2210,6 +2418,22 @@ async function runSmokeTest(win) {
   if (settingsExtras.error) throw new Error(settingsExtras.error);
   if (!settingsExtras.hasVideo) throw new Error('video background option missing');
   if (!settingsExtras.hasNetwork) throw new Error('proxy panel missing');
+  if (!settingsExtras.hasAppBehavior) throw new Error('desktop behaviour panel missing');
+  if (!settingsExtras.autoBackupPanel) throw new Error('automatic backup panel missing');
+  if (settingsExtras.autoDefaultEnabled) throw new Error('automatic backup should start disabled');
+  if (!settingsExtras.autoSavedOk || settingsExtras.autoSavedDays !== 3) {
+    throw new Error('automatic backup settings IPC failed');
+  }
+  if (!settingsExtras.autoRestoredOk) throw new Error('automatic backup settings were not restored');
+  await win.webContents.executeJavaScript(`
+    document.querySelector('.auto-backup')?.scrollIntoView({ block: 'center' });
+  `);
+  await delay(700);
+  await shot('03a-auto-backup.png');
+  if (typeof settingsExtras.closeToTray !== 'boolean') {
+    throw new Error('desktop preferences IPC failed');
+  }
+  if (!settingsExtras.prefsOk) throw new Error('desktop preferences write failed');
   if (!settingsExtras.saved) throw new Error('proxy setting was not applied');
   if (settingsExtras.modes < 6) throw new Error('proxy modes missing');
   if (settingsExtras.restored !== 'system') {
@@ -2218,6 +2442,48 @@ async function runSmokeTest(win) {
   if (!settingsExtras.videoSaved || settingsExtras.videoStatus !== 200) {
     throw new Error('background video IPC or media protocol failed');
   }
+
+  await win.webContents.executeJavaScript("window.location.hash = '#/admin/journey'");
+  await delay(1800);
+  const journeyCheck = await win.webContents
+    .executeJavaScript(`(async () => {
+      const years = await window.hoshikuzu.desktop.review.getYears();
+      return {
+        title: document.querySelector('.admin-topbar__title h1')?.textContent?.trim() || '',
+        kicker: document.querySelector('.admin-topbar__title .section-kicker')?.textContent?.trim() || '',
+        stats: Boolean(document.querySelector('.journey-stats')),
+        empty: Boolean(document.querySelector('.admin-empty')),
+        reviewPanel: Boolean(document.querySelector('.journey-review')),
+        topRows: document.querySelectorAll('.journey-top li').length,
+        worldCards: document.querySelectorAll('.journey-world').length,
+        reviewOptions: Array.from(document.querySelectorAll('.journey-review option')).map(
+          (option) => Number(option.value),
+        ),
+        yearsOk: Boolean(years.ok),
+        years: years.years || [],
+      };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] journey page', journeyCheck);
+  if (journeyCheck.error) throw new Error(journeyCheck.error);
+  if (journeyCheck.kicker !== 'JOURNEY' || journeyCheck.title !== '世界旅程') {
+    throw new Error('journey page did not render');
+  }
+  if (!journeyCheck.yearsOk || journeyCheck.years.length === 0) {
+    throw new Error('year review years IPC failed');
+  }
+  if (!journeyCheck.stats || journeyCheck.topRows === 0) {
+    throw new Error('journey statistics did not render');
+  }
+  if (!journeyCheck.reviewPanel || journeyCheck.worldCards === 0) {
+    throw new Error('year review panel or world wall missing');
+  }
+  if (journeyCheck.reviewOptions.join(',') !== journeyCheck.years.join(',')) {
+    throw new Error('year review options do not match the years IPC');
+  }
+  await win.webContents.executeJavaScript('window.scrollTo(0, 0)');
+  await delay(500);
+  await shot('03h-journey.png');
 
   await win.webContents.executeJavaScript("window.location.hash = '#/admin/worlds'");
   await delay(1800);
@@ -2275,6 +2541,44 @@ async function runSmokeTest(win) {
   `);
   await delay(900);
   await shot('03b-library-panel.png');
+
+  const libraryPanels = await win.webContents
+    .executeJavaScript(`(() => ({
+      autoImport: Boolean(document.querySelector('.library-panel__autoimport')),
+      duplicates: Boolean(document.querySelector('.library-panel__duplicates')),
+      health: Boolean(document.querySelector('.library-panel__health')),
+      autoText: document.querySelector('.library-panel__autoimport')?.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 60) || '',
+      dupText: document.querySelector('.library-panel__duplicates')?.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 60) || '',
+    }))()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] library panels', libraryPanels);
+  if (libraryPanels.error) throw new Error(libraryPanels.error);
+  if (!libraryPanels.autoImport || !libraryPanels.duplicates || !libraryPanels.health) {
+    throw new Error('auto-import, duplicate or health panel missing');
+  }
+
+  const healthCheck = await win.webContents
+    .executeJavaScript(`(async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const button = document.querySelector('.library-panel__health button');
+      if (!button) return { error: 'health button missing' };
+      button.click();
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const issue = document.querySelector('.health-issue');
+        if (issue) {
+          return {
+            issue: true,
+            text: issue.textContent.replace(/\\s+/g, ' ').trim().slice(0, 60),
+          };
+        }
+        await wait(200);
+      }
+      return { issue: false, text: '' };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] health check', healthCheck);
+  if (healthCheck.error) throw new Error(healthCheck.error);
+  if (!healthCheck.issue) throw new Error('health scan did not render an issue card');
 
   await win.webContents.executeJavaScript("window.location.hash = '#/admin/sync'");
   await delay(1800);
@@ -2582,6 +2886,303 @@ async function runSmokeTest(win) {
   await delay(1400);
   await shot('04-photos.png');
 
+  const photoToolbar = await win.webContents
+    .executeJavaScript(`(() => ({
+      tagFilter: Array.from(document.querySelectorAll('.admin-toolbar select')).some((select) => select.getAttribute('aria-label') === '按标签筛选'),
+      favoriteFilter: Array.from(document.querySelectorAll('.admin-toolbar select')).some((select) => select.getAttribute('aria-label') === '按收藏筛选'),
+      starButtons: document.querySelectorAll('.admin-star-toggle').length,
+    }))()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] photo toolbar', photoToolbar);
+  if (photoToolbar.error) throw new Error(photoToolbar.error);
+  if (!photoToolbar.tagFilter || !photoToolbar.favoriteFilter) {
+    throw new Error('tag/favourite filters missing');
+  }
+  if (photoToolbar.starButtons < 1) throw new Error('favourite star action missing');
+
+  const favoritesBefore =
+    (await repository.readLibrary(currentLibraryRoot))?.album.photos.filter(
+      (photo) => photo.favorite === true,
+    ).length ?? 0;
+  const favoriteDebug = await win.webContents
+    .executeJavaScript(`(async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const button = document.querySelector('.admin-star-toggle');
+      const beforeActive = document.querySelectorAll('.admin-star-toggle.is-active').length;
+      button?.click();
+      await wait(1200);
+      const loaded = window.hoshikuzu.desktop.album.loadSync();
+      const data = loaded?.json ? JSON.parse(loaded.json) : null;
+      return {
+        beforeActive,
+        afterActive: document.querySelectorAll('.admin-star-toggle.is-active').length,
+        persisted: data?.photos?.filter((photo) => photo.favorite === true).length || 0,
+        sample: data?.photos?.slice(0, 2).map((photo) => ({
+          id: photo.id,
+          favorite: photo.favorite,
+        })),
+        button: button ? button.className : null,
+      };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] favourite debug', favoriteDebug);
+  if (favoriteDebug.error) throw new Error(favoriteDebug.error);
+  await delay(400);
+  const favoritesAfter =
+    (await repository.readLibrary(currentLibraryRoot))?.album.photos.filter(
+      (photo) => photo.favorite === true,
+    ).length ?? 0;
+  console.log('[desktop:smoke] favourite persisted', {
+    before: favoritesBefore,
+    after: favoritesAfter,
+    active: favoriteDebug.afterActive,
+    persistedInRenderer: favoriteDebug.persisted,
+  });
+  if (favoritesAfter !== favoritesBefore + 1) {
+    throw new Error('favourite was not persisted to hoshikuzu-library.json');
+  }
+  await win.webContents.reload();
+  await delay(1600);
+  const favoritesReloaded = await win.webContents
+    .executeJavaScript(`document.querySelectorAll('.admin-star-toggle.is-active').length`)
+    .catch(() => 0);
+  console.log('[desktop:smoke] favourite after reload', favoritesReloaded);
+  if (favoritesReloaded < 1) {
+    throw new Error('favourite was lost after reload (sanitizePhoto regression)');
+  }
+
+  const bulkEditCheck = await win.webContents
+    .executeJavaScript(`(async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const box = document.querySelector('.admin-photo-table tbody input[type=checkbox]');
+      if (!box) return { error: 'row checkbox missing' };
+      box.click();
+      await wait(250);
+      const button = Array.from(document.querySelectorAll('.admin-bulkbar .text-button'))
+        .find((element) => element.textContent.includes('批量编辑'));
+      if (!button) return { error: 'bulk edit button missing' };
+      button.click();
+      await wait(350);
+      const modal = document.querySelector('.bulk-edit-modal');
+      const result = {
+        modal: Boolean(modal),
+        title: modal?.querySelector('h2')?.textContent?.trim() || '',
+        fields: modal?.querySelectorAll('.bulk-edit__grid .field').length || 0,
+      };
+      modal?.querySelector('.bulk-edit__actions .button--ghost')?.click();
+      await wait(200);
+      return { ...result, closed: !document.querySelector('.bulk-edit-modal') };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] bulk edit', bulkEditCheck);
+  if (bulkEditCheck.error) throw new Error(bulkEditCheck.error);
+  if (!bulkEditCheck.modal || !bulkEditCheck.closed) {
+    throw new Error('bulk edit dialog did not open/close');
+  }
+
+  // ---- Player library: add a stranger, tag a group photo, verify privacy ----
+  const addedPlayer = await win.webContents
+    .executeJavaScript(`(async () => {
+      const api = window.hoshikuzu.desktop;
+      const added = await api.players.add({
+        displayName: 'Smoke Player',
+        note: '冒烟测试玩家',
+      });
+      const list = await api.players.list();
+      return {
+        ok: Boolean(added.ok),
+        id: added.player?.id || '',
+        source: added.player?.source || '',
+        count: list.players?.length || 0,
+        err: added.error || list.error || '',
+      };
+    })()`)
+    .catch((error) => ({ ok: false, err: error.message, id: '' }));
+  console.log('[desktop:smoke] player add', addedPlayer);
+  if (!addedPlayer.ok || !addedPlayer.id) {
+    throw new Error(`player add failed: ${addedPlayer.err || ''}`);
+  }
+  if (addedPlayer.count < 1 || addedPlayer.source !== 'manual') {
+    throw new Error('player library did not persist the manual player');
+  }
+
+  await win.webContents.executeJavaScript(
+    `document.querySelector('.admin-photo-table tbody tr')?.click()`,
+  );
+  await delay(700);
+  await win.webContents.executeJavaScript(`
+    document.querySelector('.admin-photo-players')?.scrollIntoView({ block: 'center' });
+  `);
+  await delay(300);
+  const pickerOpened = await win.webContents
+    .executeJavaScript(`(async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      document.querySelector('.player-tag-add')?.click();
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const row = document.querySelector('.player-picker__row');
+        if (row) {
+          row.click();
+          await wait(250);
+          return {
+            open: true,
+            rows: document.querySelectorAll('.player-picker__row').length,
+            selected: document.querySelectorAll('.player-picker__row.is-selected').length,
+          };
+        }
+        await wait(150);
+      }
+      return { open: Boolean(document.querySelector('.player-picker')), rows: 0, selected: 0 };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] player picker', pickerOpened);
+  if (pickerOpened.error) throw new Error(pickerOpened.error);
+  if (!pickerOpened.open || pickerOpened.selected !== 1) {
+    throw new Error('player picker did not render/select the player');
+  }
+  await shot('03k-player-picker.png');
+
+  await win.webContents.executeJavaScript(`
+    document.querySelector('.player-picker__footer .button--primary')?.click();
+  `);
+  await delay(400);
+  const editorHasChip = await win.webContents
+    .executeJavaScript(
+      `Boolean(document.querySelector('.admin-photo-players .player-chip'))`,
+    )
+    .catch(() => false);
+  if (!editorHasChip) throw new Error('selected player chip missing in photo editor');
+  await win.webContents.executeJavaScript(`
+    document.querySelector('.admin-editor__actions .button--primary')?.click();
+  `);
+  await delay(1400);
+
+  const taggedAlbum = await repository.readLibrary(currentLibraryRoot);
+  const taggedPhoto = taggedAlbum?.album.photos.find((photo) =>
+    Array.isArray(photo.playerIds) ? photo.playerIds.includes(addedPlayer.id) : false,
+  );
+  console.log('[desktop:smoke] player tagged photo', {
+    found: Boolean(taggedPhoto),
+    ids: taggedPhoto?.playerIds || [],
+  });
+  if (!taggedPhoto) {
+    throw new Error('photo playerIds were not persisted to hoshikuzu-library.json');
+  }
+  if (JSON.stringify(taggedAlbum.album).includes('Smoke Player')) {
+    throw new Error('player name leaked into the public album payload');
+  }
+  let storedPlayers = null;
+  try {
+    storedPlayers = JSON.parse(
+      await fsp.readFile(
+        path.join(currentLibraryRoot, '.hoshikuzu', 'players', 'players.json'),
+        'utf8',
+      ),
+    );
+  } catch {
+    storedPlayers = null;
+  }
+  const storedPlayer = storedPlayers?.players?.find(
+    (player) => player.id === addedPlayer.id,
+  );
+  console.log('[desktop:smoke] player disk state', {
+    file: Boolean(storedPlayers),
+    found: Boolean(storedPlayer),
+    note: storedPlayer?.note || '',
+  });
+  if (!storedPlayer || storedPlayer.note !== '冒烟测试玩家') {
+    throw new Error('player library was not written to .hoshikuzu/players/players.json');
+  }
+
+  const avatarName = `${'a'.repeat(40)}.webp`;
+  const avatarDir = path.join(currentLibraryRoot, '.hoshikuzu', 'players', 'avatars');
+  await fsp.mkdir(avatarDir, { recursive: true });
+  await fsp.writeFile(
+    path.join(avatarDir, avatarName),
+    await require('sharp')({
+      create: { width: 16, height: 16, channels: 3, background: '#c0a9ff' },
+    })
+      .webp()
+      .toBuffer(),
+  );
+  const playerMedia = await win.webContents
+    .executeJavaScript(`(async () => {
+      const ok = await fetch('hoshikuzu-media://player/avatars/${avatarName}')
+        .then((response) => response.status)
+        .catch(() => 0);
+      const traversal = await fetch('hoshikuzu-media://player/avatars/../players.json')
+        .then((response) => response.status)
+        .catch(() => 0);
+      return { ok, traversal };
+    })()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] player media protocol', playerMedia);
+  if (playerMedia.error) throw new Error(playerMedia.error);
+  if (playerMedia.ok !== 200 || playerMedia.traversal === 200) {
+    throw new Error('player avatar protocol failed its path checks');
+  }
+
+  await win.webContents.reload();
+  await delay(1600);
+  const reloadedPlayerTag = await win.webContents
+    .executeJavaScript(`(() => {
+      const loaded = window.hoshikuzu.desktop.album.loadSync();
+      const data = loaded?.json ? JSON.parse(loaded.json) : null;
+      const photo = data?.photos?.find((item) =>
+        Array.isArray(item.playerIds) ? item.playerIds.includes(${JSON.stringify(
+          addedPlayer.id,
+        )}) : false,
+      );
+      return photo?.playerIds || [];
+    })()`)
+    .catch(() => []);
+  console.log('[desktop:smoke] player tag after reload', reloadedPlayerTag);
+  if (!reloadedPlayerTag.includes(addedPlayer.id)) {
+    throw new Error('playerIds were lost after reload (sanitizePhoto regression)');
+  }
+
+  await win.webContents.executeJavaScript("window.location.hash = '#/admin/players'");
+  await delay(1300);
+  const playersPage = await win.webContents
+    .executeJavaScript(`(() => ({
+      title: document.querySelector('.admin-topbar__title h1')?.textContent?.trim() || '',
+      kicker: document.querySelector('.admin-topbar__title .section-kicker')?.textContent?.trim() || '',
+      cards: document.querySelectorAll('.player-card').length,
+      text: document.querySelector('.player-card')?.textContent?.replace(/\\s+/g, ' ').trim() || '',
+    }))()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] players page', playersPage);
+  if (playersPage.error) throw new Error(playersPage.error);
+  if (playersPage.kicker !== 'PLAYERS' || playersPage.title !== '玩家列表') {
+    throw new Error('players page did not render');
+  }
+  if (playersPage.cards < 1 || !playersPage.text.includes('1 张合照')) {
+    throw new Error('player card or tagged-photo count missing');
+  }
+  await win.webContents.executeJavaScript('window.scrollTo(0, 0)');
+  await delay(400);
+  await shot('03l-players.png');
+
+  await win.webContents.executeJavaScript(`document.querySelector('.player-card')?.click()`);
+  await delay(500);
+  const playerDetail = await win.webContents
+    .executeJavaScript(`(() => ({
+      open: Boolean(document.querySelector('.player-detail')),
+      hasNote: Boolean(document.getElementById('player-detail-note')),
+      hasPhoto: Boolean(document.querySelector('.player-detail__photo-grid img')),
+      text: document.querySelector('.player-detail')?.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 120) || '',
+    }))()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] player detail', playerDetail);
+  if (playerDetail.error) throw new Error(playerDetail.error);
+  if (!playerDetail.open || !playerDetail.hasNote || !playerDetail.hasPhoto) {
+    throw new Error('player detail did not show note and tagged photos');
+  }
+  await shot('03m-player-detail.png');
+  await win.webContents.executeJavaScript(`
+    document.querySelector('.player-detail [aria-label="关闭玩家资料"]')?.click();
+  `);
+  await delay(300);
+
   const advancedApiCheck = await win.webContents
     .executeJavaScript(`(async () => {
       const api = window.hoshikuzu.desktop;
@@ -2619,6 +3220,34 @@ async function runSmokeTest(win) {
   await delay(1200);
   await shot('05-home-return.png');
 
+  await win.webContents.executeJavaScript(
+    `document.querySelector('.header-slideshow')?.click()`,
+  );
+  await delay(900);
+  const slideshowCheck = await win.webContents
+    .executeJavaScript(`(() => ({
+      open: Boolean(document.querySelector('.slideshow')),
+      image: Boolean(document.querySelector('.slideshow__frame-image')),
+      modes: document.querySelectorAll('.slideshow__modes button').length,
+      info: Boolean(document.querySelector('.slideshow__info')),
+      playing: Boolean(document.querySelector('.slideshow.is-playing')),
+    }))()`)
+    .catch((error) => ({ error: error.message }));
+  console.log('[desktop:smoke] slideshow', slideshowCheck);
+  if (slideshowCheck.error) throw new Error(slideshowCheck.error);
+  if (!slideshowCheck.open || !slideshowCheck.image || slideshowCheck.modes < 2) {
+    throw new Error('slideshow did not open correctly');
+  }
+  await shot('12-slideshow.png');
+  await win.webContents.executeJavaScript(
+    `document.querySelector('.slideshow__top-actions button[aria-label="关闭幻灯片"]')?.click()`,
+  );
+  await delay(400);
+  const slideshowClosed = await win.webContents
+    .executeJavaScript(`!document.querySelector('.slideshow')`)
+    .catch(() => false);
+  if (!slideshowClosed) throw new Error('slideshow did not close');
+
   app.quit();
 }
 
@@ -2648,9 +3277,19 @@ async function bootstrap() {
   });
   syncService.register();
 
-  networkService = createNetworkService({ broadcast });
+  networkService = createNetworkService({
+    broadcast,
+    onVRChatLogin: () => playersService?.handleLogin(),
+  });
   networkService.register();
   await networkService.startAuto();
+
+  playersService = createPlayersService({
+    broadcast,
+    getRoot: getAvailableRoot,
+    getClient: () => networkService?.client,
+  });
+  playersService.register();
 
   updateService = createUpdateService({ broadcast });
   updateService.register();
@@ -2661,13 +3300,68 @@ async function bootstrap() {
     getRoot: getAvailableRoot,
     getAlbum: albumForMobile,
     getPreviewDir: previewDirFor,
+    getPreviewMaxEdge: previewMaxEdgeFor,
+    onDraft: (draft) => {
+      void ingestDraftPlayers([draft]);
+    },
   });
   mobileService.register();
+
+  autoImportService = createAutoImportService({
+    broadcast,
+    getWindow: () => mainWindow,
+    getRoot: getAvailableRoot,
+    getPreviewMaxEdge: previewMaxEdgeFor,
+    onDraft: (draft) => {
+      void ingestDraftPlayers([draft]);
+    },
+  });
+  autoImportService.register();
+
+  duplicateService = createDuplicateService({
+    broadcast,
+    getRoot: getAvailableRoot,
+  });
+  duplicateService.register();
+
+  healthService = createHealthService({
+    getRoot: getAvailableRoot,
+  });
+  healthService.register();
+
+  wallpaperService = createWallpaperService({
+    getRoot: getAvailableRoot,
+  });
+  wallpaperService.register();
+
+  autoBackupService = createAutoBackupService({
+    broadcast,
+    getWindow: () => mainWindow,
+    getRoot: getAvailableRoot,
+  });
+  autoBackupService.register();
+
+  yearReviewService = createYearReviewService({
+    getWindow: () => mainWindow,
+    getRoot: getAvailableRoot,
+    getAlbum: albumForMobile,
+    getPreviewDir: previewDirFor,
+  });
+  yearReviewService.register();
 
   registerIpc();
   await createWindow();
   await advancedServices.startAuto();
   await mobileService.startAuto();
+  await autoImportService.startAuto();
+  autoBackupService.startAuto();
+  // Only probe VRChat when this machine has already saved an account; a clean
+  // install must not get a misleading "login expired" player-list error.
+  if (!isSmoke && config.readConfigSync().vrchat?.username) {
+    playersService.startAuto();
+  }
+  if (!isSmoke || process.env.HOSHIKUZU_TRAY_SMOKE === '1') createTray();
+  if (!isSmoke) applyLoginItemSettings(config.readConfigSync().desktop || {});
 }
 
 const gotLock = isSmoke || app.requestSingleInstanceLock();
@@ -2675,8 +3369,14 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow) return;
+    if (!mainWindow) {
+      void createWindow().catch((error) => {
+        console.error('[desktop] restore window failed', error);
+      });
+      return;
+    }
     if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
     mainWindow.focus();
   });
 
@@ -2698,7 +3398,11 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
+    if (quitting) return;
+    if (process.platform === 'darwin') return;
+    const behavior = config.readConfigSync().desktop || {};
+    if (tray && behavior.closeToTray !== false) return;
+    app.quit();
   });
 
   app.on('before-quit', () => {
@@ -2706,8 +3410,15 @@ if (!gotLock) {
     quitting = true;
     flushSaveSync();
     clearSampleCache();
+    if (tray) {
+      tray.destroy();
+      tray = null;
+    }
     if (syncService) syncService.dispose();
     if (mobileService) void mobileService.dispose();
+    if (autoImportService) void autoImportService.dispose();
+    if (autoBackupService) autoBackupService.dispose();
+    if (duplicateService) void duplicateService.dispose();
     if (advancedServices) {
       void advancedServices.stopAll();
     }

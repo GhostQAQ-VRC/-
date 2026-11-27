@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useLayoutEffect } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
+import type { PhotoDraft } from './types';
 import { useAlbum } from './hooks/useAlbum';
 import { useHashRoute } from './hooks/useHashRoute';
 import { APPEARANCE_CACHE_KEY, themeChromeColor, themeTone } from './data/appearance';
@@ -9,6 +10,8 @@ import { MobileCastProvider } from './hooks/useMobileCast';
 import { ThumbnailLoadingProvider } from './hooks/useThumbnailLoader';
 import { getDesktopBridge, isDesktopRuntime } from './platform';
 import { isMobileRuntime } from './platform/mobileRuntime';
+import { androidBridge } from './mobile/native';
+import { formatDateShort } from './utils/date';
 import { importPhotosFromDesktop } from './platform/importPhotos';
 import { DesktopTitleBar } from './components/DesktopTitleBar';
 import { UpdateNotice } from './components/UpdateNotice';
@@ -78,6 +81,7 @@ function Shell({
   const { pushToast } = useToast();
   const { chooseLibrary, scan, openFolder, config: libraryConfig } = useDesktopLibrary();
   const addPhoto = album.addPhoto;
+  const widgetSignature = useRef('');
   // Web builds have no local library config; browser-native lazy loading is
   // the closest match to realtime mode.
   const imageLoadingMode = libraryConfig?.imageLoadingMode ?? 'realtime';
@@ -156,6 +160,88 @@ function Shell({
       }
     });
   }, [bridge, chooseLibrary, scan, openFolder, addPhoto, navigate, pushToast]);
+
+  // Phone uploads and watched-folder imports arrive as drafts from the main
+  // process; merge them into the live album so the timeline updates without a
+  // full rescan.
+  useEffect(() => {
+    if (!bridge || typeof bridge.library.onImported !== 'function') return;
+    return bridge.library.onImported((draft) => {
+      addPhoto(draft);
+      pushToast({
+        tone: 'success',
+        title: '收录了一张新照片',
+        description: draft.note || draft.alt || '来自手机回传 / 自动导入',
+      });
+    });
+  }, [bridge, addPhoto, pushToast]);
+
+  // Images shared from other Android apps arrive as drafts (before or after
+  // React mounts). The native bridge queues them and dispatches this event.
+  useEffect(() => {
+    if (!mobile) return undefined;
+    const receive = (drafts: PhotoDraft[]) => {
+      if (!Array.isArray(drafts) || drafts.length === 0) return;
+      for (const draft of drafts) addPhoto(draft);
+      pushToast({
+        tone: 'success',
+        title: `已收录 ${drafts.length} 张分享照片`,
+        description: '来自系统分享，已加入本地相册。',
+      });
+    };
+    const queued = window.__hoshikuzuSharedDrafts;
+    if (Array.isArray(queued) && queued.length > 0) {
+      window.__hoshikuzuSharedDrafts = [];
+      receive(queued as PhotoDraft[]);
+    }
+    const onShared = (event: Event) => {
+      const detail = (event as CustomEvent<PhotoDraft[]>).detail;
+      window.__hoshikuzuSharedDrafts = [];
+      receive(detail);
+    };
+    window.addEventListener('hoshikuzu:shared-media', onShared);
+    return () => window.removeEventListener('hoshikuzu:shared-media', onShared);
+  }, [mobile, addPhoto, pushToast]);
+
+  // Home-screen "on this day" widget: push one preview + non-sensitive caption.
+  // Notes stay out of the widget so the app lock is not undermined by it.
+  useEffect(() => {
+    if (!mobile) return;
+    const today = new Date();
+    const match =
+      album.photos
+        .filter(
+          (photo) =>
+            !photo.missing &&
+            Boolean(photo.previewPath) &&
+            Boolean(photo.capturedAt),
+        )
+        .filter((photo) => {
+          const date = new Date(photo.capturedAt);
+          return (
+            !Number.isNaN(date.getTime()) &&
+            date.getMonth() === today.getMonth() &&
+            date.getDate() === today.getDate() &&
+            date.getFullYear() < today.getFullYear()
+          );
+        })
+        .sort((a, b) => Date.parse(b.capturedAt) - Date.parse(a.capturedAt))[0] ?? null;
+    const signature = match ? `${match.id}:${match.previewPath}` : 'empty';
+    if (widgetSignature.current === signature) return;
+    widgetSignature.current = signature;
+    const payload = match
+      ? {
+          previewPath: match.previewPath,
+          title: (match.world?.name || '那年今天').slice(0, 60),
+          subtitle: `${formatDateShort(match.capturedAt)} · 时光轴`,
+        }
+      : {};
+    try {
+      androidBridge()?.updateOnThisDayWidget?.(JSON.stringify(payload));
+    } catch {
+      // The widget is optional; never disturb the album.
+    }
+  }, [mobile, album.photos]);
 
   return (
     <>

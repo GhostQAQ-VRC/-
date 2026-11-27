@@ -49,6 +49,9 @@ import '../styles/mobile-client.css';
 type BootState = 'checking' | 'ready' | 'unpaired' | 'unsupported' | 'error';
 type ReceiveMode = 'stream' | 'save';
 
+const LAST_CAST_KEY = 'hoshikuzu-last-cast-v1';
+const LAST_CAST_TTL_MS = 10 * 60 * 1000;
+
 interface ToastState {
   id: number;
   text: string;
@@ -129,7 +132,12 @@ function useHoldUpSave(onTrigger: () => void, enabled = true) {
     };
 
     const onTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1) return;
+      if (event.touches.length !== 1) {
+        // A second finger turns this into a pinch; never let the hold gesture
+        // keep arming (or fire) underneath it.
+        reset();
+        return;
+      }
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       isArmed = false;
@@ -475,17 +483,39 @@ function PhotoViewer({
   onMode: () => void;
 }) {
   const photo = photos[index];
-  const touch = useRef({ x: 0, y: 0, at: 0 });
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const gesture = useRef({
+    mode: 'none' as 'none' | 'drag' | 'pinch' | 'tap',
+    startX: 0,
+    startY: 0,
+    at: 0,
+    startDistance: 0,
+    baseZoom: 1,
+    basePanX: 0,
+    basePanY: 0,
+    lastTapAt: 0,
+    lastTapX: 0,
+    lastTapY: 0,
+    moved: false,
+  });
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const originalRef = useRef<HTMLImageElement | null>(null);
   const [originalLoaded, setOriginalLoaded] = useState(false);
   const [originalFailed, setOriginalFailed] = useState(false);
   const hold = useHoldUpSave(() => {
     if (photo) onSave(photo);
-  }, Boolean(photo?.originalUrl));
+  }, Boolean(photo?.originalUrl) && zoom <= 1);
 
   useEffect(() => {
     setOriginalLoaded(false);
     setOriginalFailed(false);
+  }, [photo?.id]);
+
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    gesture.current.lastTapAt = 0;
   }, [photo?.id]);
 
   useEffect(() => {
@@ -497,6 +527,145 @@ function PhotoViewer({
   const saving = savingId === photo.id;
   const ratio = orientedRatio(photo);
   const rotated = photo.rotation === 90 || photo.rotation === 270;
+
+  const clampPan = (x: number, y: number, scale: number) => {
+    const rect = stageRef.current?.getBoundingClientRect();
+    if (!rect) return { x, y };
+    const maxX = Math.max(0, (rect.width * (scale - 1)) / 2);
+    const maxY = Math.max(0, (rect.height * (scale - 1)) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, x)),
+      y: Math.max(-maxY, Math.min(maxY, y)),
+    };
+  };
+
+  const onTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const state = gesture.current;
+    if (event.touches.length >= 2) {
+      const first = event.touches[0];
+      const second = event.touches[1];
+      state.mode = 'pinch';
+      state.startDistance = Math.hypot(
+        first.clientX - second.clientX,
+        first.clientY - second.clientY,
+      );
+      state.baseZoom = zoom;
+      state.basePanX = pan.x;
+      state.basePanY = pan.y;
+      state.moved = true;
+      return;
+    }
+    const point = event.touches[0];
+    if (!point) return;
+    state.startX = point.clientX;
+    state.startY = point.clientY;
+    state.at = Date.now();
+    state.basePanX = pan.x;
+    state.basePanY = pan.y;
+    state.mode = zoom > 1 ? 'drag' : 'tap';
+    state.moved = false;
+  };
+
+  const onTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const state = gesture.current;
+    if (event.touches.length >= 2) {
+      if (event.cancelable) event.preventDefault();
+      const first = event.touches[0];
+      const second = event.touches[1];
+      const distance = Math.hypot(
+        first.clientX - second.clientX,
+        first.clientY - second.clientY,
+      );
+      if (state.startDistance <= 0) return;
+      const next = Math.min(4, Math.max(1, state.baseZoom * (distance / state.startDistance)));
+      state.mode = 'pinch';
+      setZoom(next);
+      setPan(
+        next <= 1.02
+          ? { x: 0, y: 0 }
+          : clampPan(state.basePanX, state.basePanY, next),
+      );
+      return;
+    }
+    if (state.mode === 'drag' && zoom > 1 && event.touches.length === 1) {
+      if (event.cancelable) event.preventDefault();
+      const point = event.touches[0];
+      const dx = point.clientX - state.startX;
+      const dy = point.clientY - state.startY;
+      if (Math.hypot(dx, dy) > 6) state.moved = true;
+      setPan(clampPan(state.basePanX + dx, state.basePanY + dy, zoom));
+    }
+  };
+
+  const onTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const state = gesture.current;
+    if (state.mode === 'pinch') {
+      state.mode = 'none';
+      if (zoom < 1.05) {
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+      }
+      return;
+    }
+    if (hold.consumed.current) {
+      hold.consumed.current = false;
+      state.mode = 'none';
+      return;
+    }
+    const point = event.changedTouches[0];
+    if (!point) {
+      state.mode = 'none';
+      return;
+    }
+    const dx = point.clientX - state.startX;
+    const dy = point.clientY - state.startY;
+    const elapsed = Date.now() - state.at;
+    const isTap = elapsed < 320 && Math.hypot(dx, dy) < 12;
+    const now = Date.now();
+    if (state.mode === 'drag') {
+      if (
+        !state.moved &&
+        now - state.lastTapAt < 320 &&
+        Math.hypot(point.clientX - state.lastTapX, point.clientY - state.lastTapY) < 30
+      ) {
+        // Double-tap while zoomed: return to fit.
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+        state.lastTapAt = 0;
+      } else if (!state.moved) {
+        state.lastTapAt = now;
+        state.lastTapX = point.clientX;
+        state.lastTapY = point.clientY;
+      }
+      state.mode = 'none';
+      return;
+    }
+    if (isTap) {
+      if (
+        now - state.lastTapAt < 320 &&
+        Math.hypot(point.clientX - state.lastTapX, point.clientY - state.lastTapY) < 30
+      ) {
+        setZoom(2.5);
+        setPan({ x: 0, y: 0 });
+        state.lastTapAt = 0;
+      } else {
+        state.lastTapAt = now;
+        state.lastTapX = point.clientX;
+        state.lastTapY = point.clientY;
+      }
+      state.mode = 'none';
+      return;
+    }
+    if (
+      elapsed < 600 &&
+      Math.abs(dx) > 54 &&
+      Math.abs(dx) > Math.abs(dy) * 1.2
+    ) {
+      if (dx < 0 && index < photos.length - 1) onIndex(index + 1);
+      if (dx > 0 && index > 0) onIndex(index - 1);
+    }
+    state.mode = 'none';
+  };
 
   return (
     <div className="m-viewer" role="dialog" aria-modal="true" aria-label="照片大图">
@@ -517,30 +686,25 @@ function PhotoViewer({
       </header>
 
       <div
-        className={`m-viewer__stage${hold.armed ? ' is-holding' : ''}`}
-        ref={hold.ref as React.RefObject<HTMLDivElement>}
-        onTouchStart={(event) => {
-          touch.current.x = event.touches[0]?.clientX ?? 0;
-          touch.current.y = event.touches[0]?.clientY ?? 0;
-          touch.current.at = Date.now();
+        className={`m-viewer__stage${hold.armed ? ' is-holding' : ''}${zoom > 1 ? ' is-zoomed' : ''}`}
+        ref={(node) => {
+          stageRef.current = node;
+          (hold.ref as unknown as React.MutableRefObject<HTMLDivElement | null>).current =
+            node;
         }}
-        onTouchEnd={(event) => {
-          const point = event.changedTouches[0];
-          if (!point) return;
-          const dx = point.clientX - touch.current.x;
-          const dy = point.clientY - touch.current.y;
-          if (Date.now() - touch.current.at > 600) return;
-          if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-            if (dx < 0 && index < photos.length - 1) onIndex(index + 1);
-            if (dx > 0 && index > 0) onIndex(index - 1);
-          }
-        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
       >
       <div
         className={`m-viewer__photo${rotated ? ' is-rotated' : ''}`}
         data-rot={photo.rotation}
         style={{ aspectRatio: `${ratio}` }}
       >
+        <div
+          className={`m-viewer__zoom${zoom > 1 ? ' is-zoomed' : ''}`}
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+        >
           {!originalLoaded ? (
             <img className="m-viewer__preview" src={photo.src} alt="" aria-hidden="true" />
           ) : null}
@@ -555,12 +719,13 @@ function PhotoViewer({
             />
           ) : null}
           {!photo.originalUrl ? <img className="m-viewer__original is-loaded" src={photo.src} alt={photo.alt} /> : null}
-          {hold.armed ? (
-            <span className="m-viewer__hold" style={{ opacity: Math.min(1, hold.distance / 48) }}>
-              <ArrowDownToLine size={18} />
-              继续上滑，保存到手机
-            </span>
-          ) : null}
+        </div>
+        {hold.armed ? (
+          <span className="m-viewer__hold" style={{ opacity: Math.min(1, hold.distance / 48) }}>
+            <ArrowDownToLine size={18} />
+            继续上滑，保存到手机
+          </span>
+        ) : null}
         </div>
         {index > 0 ? (
           <button
@@ -779,6 +944,27 @@ export function MobileApp() {
         setIncoming(payload);
         setMode(payload.mode);
         holdVibrate([18, 70, 18]);
+        // Persist briefly so returning from a notification (or a WebView
+        // restart) still shows the cast overlay.
+        try {
+          window.localStorage.setItem(
+            LAST_CAST_KEY,
+            JSON.stringify({ cast: payload, at: Date.now() }),
+          );
+        } catch {
+          // Private mode / storage full: the overlay still works in-session.
+        }
+        const visible =
+          document.visibilityState === 'visible' && document.hasFocus();
+        if (!visible) {
+          window.HoshikuzuAndroid?.notifyCast?.(
+            payload.photo.id,
+            '收到一张投送',
+            payload.photo.note ||
+              payload.photo.world?.name ||
+              '电脑把一张照片投送到了手机',
+          );
+        }
       } catch {
         // Ignore malformed events.
       }
@@ -817,6 +1003,22 @@ export function MobileApp() {
     };
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(LAST_CAST_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { cast?: IncomingCast; at?: number };
+      if (!saved?.cast?.photo?.src || Date.now() - Number(saved.at || 0) > LAST_CAST_TTL_MS) {
+        window.localStorage.removeItem(LAST_CAST_KEY);
+        return;
+      }
+      setIncoming(saved.cast);
+      setMode(saved.cast.mode);
+    } catch {
+      // Ignore a corrupt/expired cast cache.
+    }
   }, []);
 
   const photos = album?.photos ?? [];
@@ -947,6 +1149,11 @@ export function MobileApp() {
     if (!incoming) return;
     setViewer({ photos: [incoming.photo], index: 0 });
     setIncoming(null);
+    try {
+      window.localStorage.removeItem(LAST_CAST_KEY);
+    } catch {
+      // Ignore storage errors.
+    }
   }, [incoming]);
 
   useEffect(() => {
@@ -978,6 +1185,11 @@ export function MobileApp() {
       }
       if (incoming) {
         setIncoming(null);
+        try {
+          window.localStorage.removeItem(LAST_CAST_KEY);
+        } catch {
+          // Ignore storage errors.
+        }
         return true;
       }
       if (viewer) {
@@ -1267,7 +1479,14 @@ export function MobileApp() {
           progress={saveProgress}
           onSave={incomingSave}
           onView={incomingView}
-          onClose={() => setIncoming(null)}
+          onClose={() => {
+            setIncoming(null);
+            try {
+              window.localStorage.removeItem(LAST_CAST_KEY);
+            } catch {
+              // Ignore storage errors.
+            }
+          }}
         />
       ) : null}
 

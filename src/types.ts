@@ -80,6 +80,11 @@ export interface AiSummaryResult {
   confidence?: number;
 }
 
+export interface PlayerRef {
+  id: string;
+  displayName: string;
+}
+
 export interface Photo {
   id: string;
   src: string;
@@ -130,6 +135,16 @@ export interface Photo {
   aiUpdatedAt?: string;
   aiState?: AiPhotoState;
   aiError?: string;
+  /** Curator-assigned tags, separate from AI tags. */
+  tags?: string[];
+  /** Curated favourite shown in smart albums and the star filter. */
+  favorite?: boolean;
+  /**
+   * VRChat user IDs tagged in this group photo. Names, notes and avatar
+   * snapshots live in the separate desktop player library so friend lists are
+   * never exposed through the public album payload.
+   */
+  playerIds?: string[];
 }
 
 export interface PhotoDraft {
@@ -152,6 +167,8 @@ export interface PhotoDraft {
   metaSource?: PhotoMetaSource;
   worldInstanceId?: string;
   managedCopy?: boolean;
+  /** VRCX players found on import; consumed by the player library. */
+  players?: PlayerRef[];
 }
 
 /** Result of scanning a desktop library, merged into the album by the renderer. */
@@ -169,6 +186,8 @@ export interface LibraryScanSeed {
   worldId?: string;
   worldName?: string;
   worldInstanceId?: string;
+  /** Players found in VRCX screenshot metadata, consumed by the player library. */
+  players?: PlayerRef[];
 }
 
 export interface LibraryScanWorldSeed {
@@ -225,6 +244,22 @@ export interface AlbumSettings {
   customVideoBytes?: number;
   customVideoWidth?: number;
   customVideoHeight?: number;
+  /** Saved filter presets shown on the photos page. */
+  smartAlbums?: SmartAlbum[];
+}
+
+export type FavoriteFilter = 'all' | 'only' | 'none';
+
+export interface SmartAlbum {
+  id: string;
+  name: string;
+  query: string;
+  worldRef: string;
+  origin: string;
+  sort: string;
+  tag: string;
+  favorite: FavoriteFilter;
+  createdAt: string;
 }
 
 export type ActivityType =

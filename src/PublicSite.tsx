@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Download, Share2, Trash2, UploadCloud } from 'lucide-react';
 import type { PhotoDraft } from './types';
 import type { AlbumApi } from './hooks/useAlbum';
 import { useToast } from './hooks/useToast';
@@ -19,8 +19,15 @@ import { UploadDialog } from './components/UploadDialog';
 import { PhotoDetailDialog } from './components/PhotoDetailDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { AppearancePanel } from './components/AppearancePanel';
+import { Slideshow } from './components/Slideshow';
 import { rotatePhoto } from './utils/orientation';
 import { isMobileRuntime } from './platform/mobileRuntime';
+import {
+  pairedDesktopBase,
+  saveManagedPhoto,
+  shareManagedPhotos,
+  uploadManagedPhotos,
+} from './mobile/managedActions';
 
 interface PublicSiteProps {
   album: AlbumApi;
@@ -29,11 +36,19 @@ interface PublicSiteProps {
 
 export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
   const { pushToast } = useToast();
+  const mobile = isMobileRuntime();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [slideshowOpen, setSlideshowOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchBusy, setBatchBusy] = useState<'save' | 'share' | 'upload' | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [pairedDesktop, setPairedDesktop] = useState('');
   const appearanceButtonRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const announcedCorruption = useRef(false);
@@ -76,6 +91,162 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
   const pendingDeletePhoto = pendingDeleteId
     ? (album.photos.find((photo) => photo.id === pendingDeleteId) ?? null)
     : null;
+  const selectedPhotos = useMemo(
+    () => album.photos.filter((photo) => selected.has(photo.id)),
+    [album.photos, selected],
+  );
+  const selectedManaged = useMemo(
+    () =>
+      selectedPhotos.filter(
+        (photo) =>
+          !photo.missing && Boolean(photo.libraryPath) && Boolean(photo.contentHash),
+      ),
+    [selectedPhotos],
+  );
+  const allFilteredSelected =
+    filteredPhotos.length > 0 && filteredPhotos.every((photo) => selected.has(photo.id));
+
+  useEffect(() => {
+    if (!selectMode) return;
+    setSelected((previous) => {
+      const ids = new Set(album.photos.map((photo) => photo.id));
+      const next = new Set([...previous].filter((id) => ids.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [album.photos, selectMode]);
+
+  const toggleSelectionMode = useCallback(() => {
+    if (selectMode) {
+      setSelectMode(false);
+      setSelected(new Set());
+      return;
+    }
+    setSelectMode(true);
+    setPairedDesktop(pairedDesktopBase());
+  }, [selectMode]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected((previous) => {
+      if (
+        filteredPhotos.length > 0 &&
+        filteredPhotos.every((photo) => previous.has(photo.id))
+      ) {
+        return new Set();
+      }
+      return new Set(filteredPhotos.map((photo) => photo.id));
+    });
+  }, [filteredPhotos]);
+
+  const handleBatchSave = useCallback(async () => {
+    if (batchBusy || selectedManaged.length === 0) return;
+    setBatchBusy('save');
+    let saved = 0;
+    let failed = 0;
+    for (const photo of selectedManaged) {
+      try {
+        const result = await saveManagedPhoto(photo);
+        if (result.ok) saved += 1;
+        else failed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setBatchBusy(null);
+    pushToast({
+      tone: failed ? 'warning' : 'success',
+      title: `已保存 ${saved} 张到手机`,
+      description: failed
+        ? `${failed} 张保存失败，请重试。`
+        : '可在系统相册 / 下载目录查看。',
+    });
+  }, [batchBusy, selectedManaged, pushToast]);
+
+  const handleBatchShare = useCallback(async () => {
+    if (batchBusy || selectedManaged.length === 0) return;
+    setBatchBusy('share');
+    try {
+      const result = await shareManagedPhotos(selectedManaged);
+      pushToast(
+        result.ok
+          ? {
+              tone: 'success',
+              title: `已打开分享 · ${result.count || selectedManaged.length} 张`,
+              description: '在系统分享面板里选择要发送到的应用。',
+            }
+          : { tone: 'danger', title: '分享失败', description: result.error },
+      );
+    } catch (error) {
+      pushToast({
+        tone: 'danger',
+        title: '分享失败',
+        description: error instanceof Error ? error.message : '请重试。',
+      });
+    } finally {
+      setBatchBusy(null);
+    }
+  }, [batchBusy, selectedManaged, pushToast]);
+
+  const handleBatchUpload = useCallback(async () => {
+    if (batchBusy || selectedManaged.length === 0) return;
+    if (!pairedDesktop) {
+      pushToast({
+        tone: 'warning',
+        title: '还没有连接电脑',
+        description: '请点右上角电脑图标，扫码连接后再回传。',
+      });
+      return;
+    }
+    setBatchBusy('upload');
+    setBatchProgress({ done: 0, total: selectedManaged.length });
+    try {
+      const summary = await uploadManagedPhotos(selectedManaged, (done, total) => {
+        setBatchProgress({ done, total });
+      });
+      const okCount = summary.uploaded + summary.duplicates;
+      pushToast({
+        tone: summary.failed ? 'warning' : 'success',
+        title: summary.failed
+          ? `回传完成 ${okCount} / ${selectedManaged.length} 张`
+          : `已回传 ${okCount} 张到电脑`,
+        description: summary.failed
+          ? summary.errors[0]
+          : summary.duplicates
+            ? '电脑端已有部分照片，已自动去重。'
+            : '电脑端相册已更新。',
+      });
+    } catch (error) {
+      pushToast({
+        tone: 'danger',
+        title: '回传失败',
+        description: error instanceof Error ? error.message : '请检查电脑连接后重试。',
+      });
+    } finally {
+      setBatchBusy(null);
+      setBatchProgress(null);
+    }
+  }, [batchBusy, pairedDesktop, selectedManaged, pushToast]);
+
+  const confirmBatchDelete = useCallback(() => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    album.deletePhotos(ids);
+    setBatchDeleteOpen(false);
+    setSelected(new Set());
+    setSelectMode(false);
+    pushToast({
+      title: `已删除 ${ids.length} 张记忆`,
+      description: '本地原图已从应用私有目录移除，无法撤销。',
+    });
+  }, [album, selected, pushToast]);
 
   useEffect(() => {
     document.title =
@@ -200,6 +371,15 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
     [album.updatePhoto],
   );
 
+  const handleToggleFavorite = useCallback(
+    (id: string) => {
+      const photo = photosRef.current.find((item) => item.id === id);
+      if (!photo) return;
+      album.updatePhoto(id, { favorite: photo.favorite ? undefined : true });
+    },
+    [album.updatePhoto],
+  );
+
   const handleUploadAdd = (draft: PhotoDraft) => {
     album.addPhoto(draft);
     setFilters(DEFAULT_FILTERS);
@@ -259,6 +439,9 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
             ? () => window.HoshikuzuAndroid?.openConnect?.()
             : undefined
         }
+        onSelect={mobile ? toggleSelectionMode : undefined}
+        selectionActive={selectMode}
+        onSlideshow={() => setSlideshowOpen(true)}
       />
 
       <main>
@@ -342,6 +525,10 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
                   onOpenPhoto={openPhoto}
                   onRequestDelete={requestPhotoDelete}
                   onUpload={openUpload}
+                  onToggleFavorite={handleToggleFavorite}
+                  selectionMode={mobile && selectMode}
+                  selected={selected}
+                  onToggleSelect={toggleSelect}
                 />
               )}
             </div>
@@ -375,6 +562,61 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
         onReset={handleReset}
       />
 
+      {mobile && selectMode ? (
+        <div className="mobile-batch-bar" role="toolbar" aria-label="批量操作">
+          <div className="mobile-batch-bar__head">
+            <button type="button" onClick={toggleSelectionMode}>
+              取消
+            </button>
+            <strong>{selected.size > 0 ? `已选 ${selected.size} 张` : '选择照片'}</strong>
+            <button type="button" onClick={toggleSelectAll}>
+              {allFilteredSelected ? '取消全选' : '全选'}
+            </button>
+          </div>
+          <div className="mobile-batch-bar__actions">
+            <button
+              type="button"
+              disabled={selectedManaged.length === 0 || batchBusy !== null}
+              onClick={() => void handleBatchSave()}
+            >
+              <Download size={17} strokeWidth={1.8} aria-hidden="true" />
+              <span>{batchBusy === 'save' ? '保存中…' : '保存'}</span>
+            </button>
+            <button
+              type="button"
+              disabled={selectedManaged.length === 0 || batchBusy !== null}
+              onClick={() => void handleBatchShare()}
+            >
+              <Share2 size={17} strokeWidth={1.8} aria-hidden="true" />
+              <span>分享</span>
+            </button>
+            <button
+              type="button"
+              disabled={selectedManaged.length === 0 || batchBusy !== null}
+              onClick={() => void handleBatchUpload()}
+              title={pairedDesktop ? `回传到 ${pairedDesktop}` : '请先连接电脑'}
+            >
+              <UploadCloud size={17} strokeWidth={1.8} aria-hidden="true" />
+              <span>{batchBusy === 'upload' ? '回传中…' : '回传'}</span>
+            </button>
+            <button
+              type="button"
+              className="is-danger"
+              disabled={selected.size === 0 || batchBusy !== null}
+              onClick={() => setBatchDeleteOpen(true)}
+            >
+              <Trash2 size={17} strokeWidth={1.8} aria-hidden="true" />
+              <span>删除</span>
+            </button>
+          </div>
+          {batchProgress ? (
+            <p className="mobile-batch-bar__progress">
+              正在回传 {batchProgress.done} / {batchProgress.total}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onAdd={handleUploadAdd} />
 
       <PhotoDetailDialog
@@ -391,6 +633,12 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
         onOpenAdmin={() => onNavigateAdmin('/admin/worlds')}
       />
 
+      <Slideshow
+        open={slideshowOpen}
+        photos={allSorted}
+        onClose={() => setSlideshowOpen(false)}
+      />
+
       <ConfirmDialog
         open={pendingDeletePhoto !== null}
         title="删除这段记忆？"
@@ -404,6 +652,15 @@ export function PublicSite({ album, onNavigateAdmin }: PublicSiteProps) {
         confirmLabel="确认删除"
         onConfirm={confirmQuickDelete}
         onCancel={() => setPendingDeleteId(null)}
+      />
+
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        title={`删除选中的 ${selected.size} 张记忆？`}
+        description="这些照片会从时间轴移除，并删除应用私有目录中的本地原图与缩略图。此操作无法撤销。"
+        confirmLabel="确认删除"
+        onConfirm={confirmBatchDelete}
+        onCancel={() => setBatchDeleteOpen(false)}
       />
     </div>
   );

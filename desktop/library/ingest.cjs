@@ -121,6 +121,7 @@ function draftFromPrepared(root, relativePath, prepared) {
     worldId: metadata.worldId,
     worldName: metadata.worldName,
     worldInstanceId: metadata.worldInstanceId,
+    players: Array.isArray(metadata.players) && metadata.players.length ? metadata.players : undefined,
     world: metadata.worldId
       ? {
           id: metadata.worldId,
@@ -142,6 +143,7 @@ function cacheEntryFromPrepared(relativePath, prepared) {
     worldId: metadata.worldId,
     worldName: metadata.worldName,
     worldInstanceId: metadata.worldInstanceId,
+    players: Array.isArray(metadata.players) ? metadata.players : [],
     alt: metadata.alt,
     width: dimensions.width,
     height: dimensions.height,

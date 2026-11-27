@@ -28,6 +28,7 @@ export function photoWorldSearchText(photo: Photo): string {
     photo.alt,
     photo.aiSummary,
     photo.aiTags?.join(' '),
+    photo.tags?.join(' '),
     photo.world?.name,
     photo.world?.author,
     photo.world?.description,

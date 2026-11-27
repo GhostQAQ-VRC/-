@@ -1,4 +1,4 @@
-import type { AlbumSettings } from '../types';
+import type { AlbumSettings, SmartAlbum } from '../types';
 import {
   DEFAULT_BACKGROUND,
   DEFAULT_LAYOUT,
@@ -31,8 +31,36 @@ export const DEFAULT_SETTINGS: AlbumSettings = {
   experimentalEffects: false,
 };
 
-export function normalizeSettings(value: unknown): AlbumSettings {
-  const raw = value && typeof value === 'object' ? (value as Partial<AlbumSettings>) : {};
+function normalizeSmartAlbums(value: unknown): SmartAlbum[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: SmartAlbum[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Partial<SmartAlbum>;
+    if (typeof item.id !== 'string' || typeof item.name !== 'string') continue;
+    const name = item.name.trim().slice(0, 24);
+    if (!name) continue;
+    out.push({
+      id: item.id.slice(0, 80),
+      name,
+      query: typeof item.query === 'string' ? item.query.slice(0, 120) : '',
+      worldRef: typeof item.worldRef === 'string' ? item.worldRef.slice(0, 120) : 'all',
+      origin: typeof item.origin === 'string' ? item.origin.slice(0, 40) : 'all',
+      sort: typeof item.sort === 'string' ? item.sort.slice(0, 20) : 'newest',
+      tag: typeof item.tag === 'string' ? item.tag.slice(0, 40) : 'all',
+      favorite:
+        item.favorite === 'only' || item.favorite === 'none' ? item.favorite : 'all',
+      createdAt:
+        typeof item.createdAt === 'string' && !Number.isNaN(Date.parse(item.createdAt))
+          ? item.createdAt
+          : new Date(0).toISOString(),
+    });
+    if (out.length >= 30) break;
+  }
+  return out.length ? out : undefined;
+}
+
+export function normalizeSettings(value: unknown): AlbumSettings {  const raw = value && typeof value === 'object' ? (value as Partial<AlbumSettings>) : {};
   let siteName =
     typeof raw.siteName === 'string' && raw.siteName.trim()
       ? raw.siteName.trim().slice(0, 40)
@@ -137,6 +165,7 @@ export function normalizeSettings(value: unknown): AlbumSettings {
       typeof raw.customVideoHeight === 'number' && raw.customVideoHeight > 0
         ? Math.round(raw.customVideoHeight)
         : undefined,
+    smartAlbums: normalizeSmartAlbums(raw.smartAlbums),
   };
 }
 

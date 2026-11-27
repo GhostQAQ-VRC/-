@@ -3,6 +3,7 @@
 const path = require('node:path');
 const { app, ipcMain } = require('electron');
 const config = require('../config.cjs');
+const ingest = require('../library/ingest.cjs');
 const { MobileSyncService, DEFAULT_PORT, normalizeMode } = require('../services/mobile-sync.cjs');
 
 const DIST_DIR = path.join(__dirname, '..', '..', 'dist');
@@ -12,12 +13,21 @@ function createMobileService(options) {
   const getRoot = options.getRoot;
   const getAlbum = options.getAlbum;
   const getPreviewDir = options.getPreviewDir;
+  const getPreviewMaxEdge = options.getPreviewMaxEdge;
 
   const service = new MobileSyncService({
     distDir: DIST_DIR,
     getRoot,
     getAlbum,
     getPreviewDir: (root) => getPreviewDir(root),
+    getPreviewMaxEdge: (root) =>
+      getPreviewMaxEdge ? getPreviewMaxEdge(root) : Promise.resolve(1600),
+    importReceived: (root, tempPath, name, maxEdge) =>
+      ingest.importReceivedFile(root, tempPath, name, { previewMaxEdge: maxEdge }),
+    onImported: (draft) => {
+      options.onDraft?.(draft);
+      broadcast('library:imported', draft);
+    },
     getSettings: () => config.readConfigSync().mobile,
     updateSettings: (patch) => config.writeConfig({ mobile: patch }),
     appName: 'VRchat时间轴纪念相册',

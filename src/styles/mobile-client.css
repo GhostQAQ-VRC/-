@@ -1626,3 +1626,22 @@ body.m-lock {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* ---- Viewer pinch / double-tap zoom ---- */
+.m-viewer__stage {
+  touch-action: none;
+}
+
+.m-viewer__zoom {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transform-origin: center;
+  transition: transform 0.18s ease;
+  will-change: transform;
+}
+
+.m-viewer__zoom.is-zoomed {
+  transition: none;
+}

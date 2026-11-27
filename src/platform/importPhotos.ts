@@ -24,6 +24,7 @@ export function desktopDraftToPhotoDraft(draft: DesktopImportDraft): PhotoDraft 
     metaSource: draft.metaSource,
     worldInstanceId: draft.worldInstanceId,
     managedCopy: draft.managedCopy,
+    players: draft.players,
   };
 }
 

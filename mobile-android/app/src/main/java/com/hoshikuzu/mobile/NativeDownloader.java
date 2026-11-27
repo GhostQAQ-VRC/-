@@ -92,8 +92,8 @@ final class NativeDownloader {
     }
 
     @SuppressWarnings("deprecation")
-    private static String saveToLegacyDownloads(Context context, String name, String mime,
-                                                InputStream input) throws IOException {
+    static String saveToLegacyDownloads(Context context, String name, String mime,
+                                        InputStream input) throws IOException {
         File base = Environment.getExternalStoragePublicDirectory(
                 Environment.DIRECTORY_DOWNLOADS);
         File directory = new File(base, "Hoshikuzu");
@@ -171,7 +171,7 @@ final class NativeDownloader {
         return ".jpg";
     }
 
-    private static String guessMime(String name) {
+    static String guessMime(String name) {
         String lower = name == null ? "" : name.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".png")) return "image/png";
         if (lower.endsWith(".webp")) return "image/webp";

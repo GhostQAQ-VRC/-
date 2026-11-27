@@ -12,11 +12,13 @@ import {
   RotateCcw,
   RotateCw,
   Search,
+  Star,
+  Tag,
   Trash2,
   Unlink,
 } from 'lucide-react';
 import type { AlbumApi } from '../hooks/useAlbum';
-import type { Photo } from '../types';
+import type { FavoriteFilter, Photo, SmartAlbum } from '../types';
 import { formatDateShort, formatTime } from '../utils/date';
 import { rotatePhoto } from '../utils/orientation';
 import { useToast } from '../hooks/useToast';
@@ -24,6 +26,7 @@ import { SafeImage } from '../components/SafeImage';
 import { AdminPhotoEditor } from './AdminPhotoEditor';
 import { AdminEmpty, AdminPageHead, AdminTag } from './AdminUI';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { BulkEditDialog } from './BulkEditDialog';
 
 interface PhotosPageProps {
   album: AlbumApi;
@@ -51,6 +54,7 @@ function photoSearchText(photo: Photo): string {
       photo.alt,
       photo.aiSummary,
       photo.aiTags?.join(' '),
+      photo.tags?.join(' '),
       photo.isRemote ? photo.src : '',
       photo.world?.name,
       photo.world?.author,
@@ -88,6 +92,23 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingBulk | null>(null);
+  const [tagFilter, setTagFilter] = useState('all');
+  const [favoriteFilter, setFavoriteFilter] = useState<FavoriteFilter>('all');
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [smartName, setSmartName] = useState('');
+
+  const tagOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const photo of album.photos) {
+      for (const tag of photo.tags || []) {
+        counts.set(tag, (counts.get(tag) || 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hans-CN'))
+      .map(([tag, count]) => ({ tag, count }));
+  }, [album.photos]);
+  const smartAlbums = album.settings.smartAlbums ?? [];
 
   const worldOptions = useMemo(
     () =>
@@ -110,6 +131,9 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
       if (originFilter === 'missing' && !photo.missing) return false;
       if (originFilter === 'uploaded' && !photo.isUploaded) return false;
       if (originFilter === 'sample' && !photo.isSample) return false;
+      if (favoriteFilter === 'only' && !photo.favorite) return false;
+      if (favoriteFilter === 'none' && photo.favorite) return false;
+      if (tagFilter !== 'all' && !(photo.tags || []).includes(tagFilter)) return false;
       if (worldFilter === 'unlinked') return !photo.world && !photo.worldId;
       if (worldFilter === 'pending') return !photo.world && Boolean(photo.worldId);
       if (worldFilter !== 'all' && photo.worldRef !== worldFilter) return false;
@@ -121,7 +145,7 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
       const diff = Date.parse(a.capturedAt) - Date.parse(b.capturedAt);
       return sortMode === 'oldest' ? diff : -diff;
     });
-  }, [album.photos, query, originFilter, worldFilter, sortMode]);
+  }, [album.photos, query, originFilter, worldFilter, sortMode, tagFilter, favoriteFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);
@@ -152,7 +176,53 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
     setWorldFilter('all');
     setOriginFilter('all');
     setSortMode('newest');
+    setTagFilter('all');
+    setFavoriteFilter('all');
     setPage(1);
+  };
+
+  const saveSmartAlbum = () => {
+    const name = (smartName.trim() || `智能相册 ${smartAlbums.length + 1}`).slice(0, 24);
+    const albumFilter: SmartAlbum = {
+      id: `smart_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      name,
+      query,
+      worldRef: worldFilter,
+      origin: originFilter,
+      sort: sortMode,
+      tag: tagFilter,
+      favorite: favoriteFilter,
+      createdAt: new Date().toISOString(),
+    };
+    album.updateSettings({
+      smartAlbums: [...smartAlbums, albumFilter].slice(-20),
+    });
+    setSmartName('');
+    pushToast({
+      tone: 'success',
+      title: '已保存智能相册',
+      description: `「${name}」会记住当前筛选条件。`,
+    });
+  };
+
+  const applySmartAlbum = (entry: SmartAlbum) => {
+    setQuery(entry.query);
+    setWorldFilter(entry.worldRef as WorldFilter);
+    setOriginFilter(entry.origin as OriginFilter);
+    setSortMode(entry.sort as SortMode);
+    setTagFilter(entry.tag);
+    setFavoriteFilter(entry.favorite as FavoriteFilter);
+    setPage(1);
+  };
+
+  const deleteSmartAlbum = (id: string) => {
+    album.updateSettings({
+      smartAlbums: smartAlbums.filter((entry) => entry.id !== id),
+    });
+  };
+
+  const toggleFavorite = (photo: Photo) => {
+    album.updatePhoto(photo.id, { favorite: photo.favorite ? undefined : true });
   };
 
   const toggleFeatured = (photo: Photo) => {
@@ -197,7 +267,12 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
   };
 
   const activeFilters =
-    query.trim() !== '' || worldFilter !== 'all' || originFilter !== 'all' || sortMode !== 'newest';
+    query.trim() !== '' ||
+    worldFilter !== 'all' ||
+    originFilter !== 'all' ||
+    sortMode !== 'newest' ||
+    tagFilter !== 'all' ||
+    favoriteFilter !== 'all';
 
   return (
     <div className="admin-page">
@@ -263,6 +338,35 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
           </select>
           <select
             className="admin-select"
+            value={tagFilter}
+            onChange={(event) => {
+              setTagFilter(event.target.value);
+              setPage(1);
+            }}
+            aria-label="按标签筛选"
+          >
+            <option value="all">全部标签</option>
+            {tagOptions.map((option) => (
+              <option key={option.tag} value={option.tag}>
+                #{option.tag}（{option.count}）
+              </option>
+            ))}
+          </select>
+          <select
+            className="admin-select"
+            value={favoriteFilter}
+            onChange={(event) => {
+              setFavoriteFilter(event.target.value as FavoriteFilter);
+              setPage(1);
+            }}
+            aria-label="按收藏筛选"
+          >
+            <option value="all">全部照片</option>
+            <option value="only">只看收藏</option>
+            <option value="none">未收藏</option>
+          </select>
+          <select
+            className="admin-select"
             value={sortMode}
             onChange={(event) => {
               setSortMode(event.target.value as SortMode);
@@ -286,9 +390,58 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
           </span>
         </div>
 
+        <div className="admin-smart-albums">
+          {smartAlbums.map((entry) => (
+            <span className="smart-album-chip" key={entry.id}>
+              <button type="button" onClick={() => applySmartAlbum(entry)}>
+                <Star size={11} aria-hidden="true" />
+                {entry.name}
+              </button>
+              <button
+                type="button"
+                className="smart-album-chip__remove"
+                onClick={() => deleteSmartAlbum(entry.id)}
+                aria-label={`删除智能相册 ${entry.name}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {activeFilters ? (
+            <span className="smart-album-save">
+              <Tag size={11} aria-hidden="true" />
+              <input
+                type="text"
+                value={smartName}
+                maxLength={24}
+                placeholder="智能相册名称"
+                onChange={(event) => setSmartName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    saveSmartAlbum();
+                  }
+                }}
+                aria-label="智能相册名称"
+              />
+              <button type="button" onClick={saveSmartAlbum}>
+                保存当前筛选
+              </button>
+            </span>
+          ) : null}
+        </div>
+
         {selected.size > 0 ? (
           <div className="admin-bulkbar" aria-live="polite">
             <span>已选择 {selected.size} 张</span>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setBulkEditOpen(true)}
+            >
+              <Pencil size={13} />
+              批量编辑
+            </button>
             <button
               type="button"
               className="text-button"
@@ -399,6 +552,19 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
                                     置顶
                                   </span>
                                 ) : null}
+                                <button
+                                  type="button"
+                                  className={`admin-star-toggle${photo.favorite ? ' is-active' : ''}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleFavorite(photo);
+                                  }}
+                                  aria-pressed={photo.favorite === true}
+                                  aria-label={photo.favorite ? '取消收藏' : '收藏这张照片'}
+                                  title={photo.favorite ? '取消收藏' : '收藏'}
+                                >
+                                  <Star size={11} aria-hidden="true" />
+                                </button>
                               </span>
                               <span className="admin-photo-cell__id">
                                 {photo.width ?? 1600} × {photo.height ?? 1200}
@@ -614,6 +780,24 @@ export function PhotosPage({ album, onUpload, onNavigateWorlds }: PhotosPageProp
         onNavigateWorlds={() => {
           setEditingId(null);
           onNavigateWorlds();
+        }}
+      />
+
+      <BulkEditDialog
+        open={bulkEditOpen}
+        count={selected.size}
+        worlds={album.worlds}
+        onClose={() => setBulkEditOpen(false)}
+        onApply={(patch) => {
+          const ids = [...selected];
+          album.updatePhotos(ids, patch);
+          pushToast({
+            tone: 'success',
+            title: `已更新 ${ids.length} 张照片`,
+            description: '世界、日期、备注、标签或收藏状态已应用。',
+          });
+          setBulkEditOpen(false);
+          setSelected(new Set());
         }}
       />
 

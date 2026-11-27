@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('node:http');
+const dgram = require('node:dgram');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
@@ -10,6 +11,9 @@ const QRCode = require('qrcode');
 const repository = require('../library/repository.cjs');
 
 const DEFAULT_PORT = 7880;
+// Android listens on this UDP port for LAN discovery beacons. Beacons never
+// contain the pairing token; first-time pairing still requires the QR code.
+const DISCOVERY_PORT = 7881;
 const COOKIE_NAME = 'hoshikuzu_mobile';
 const DEVICE_COOKIE = 'hoshikuzu_mobile_device';
 const SESSION_MAX_AGE = 60 * 60 * 12;
@@ -20,6 +24,9 @@ const RECEIVE_MODES = ['stream', 'save'];
 const PAIR_FAILURE_LIMIT = 20;
 const PAIR_FAILURE_WINDOW_MS = 60_000;
 const MAX_SESSION_TOKENS = 256;
+// One phone photo per request. Large enough for 48MP HEIC/RAW exports, small
+// enough that a compromised session cannot fill the disk in one call.
+const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -346,6 +353,12 @@ class MobileSyncService {
     this.getPreviewDir = options.getPreviewDir;
     this.getSettings = options.getSettings;
     this.updateSettings = options.updateSettings;
+    // Phone -> desktop uploads reuse the same magic-byte/dedupe import path
+    // as the P2P receiver; the callback is serialized below.
+    this.importReceived = options.importReceived;
+    this.getPreviewMaxEdge = options.getPreviewMaxEdge;
+    this.onImported = options.onImported || (() => {});
+    this.uploadQueue = Promise.resolve();
     this.onStatus = options.onStatus || (() => {});
     this.onCast = options.onCast || (() => {});
     this.appName = options.appName || 'VRchat时间轴纪念相册';
@@ -367,6 +380,8 @@ class MobileSyncService {
     this.lastError = null;
     this.libraryName = null;
     this.albumVersion = Date.now();
+    this.beaconSocket = null;
+    this.beaconTimer = null;
     // Reading library.json for every thumbnail would be wasteful while the
     // phone scrolls a large timeline; save events invalidate this cache.
     this.albumCache = null;
@@ -528,10 +543,100 @@ class MobileSyncService {
       }
     }, 25_000);
     if (this.heartbeat.unref) this.heartbeat.unref();
+    this.startBeacon();
     return { ok: true, status: this.pushStatus() };
   }
 
+  /** Payload safe for unauthenticated LAN broadcast: no token, no paths. */
+  beaconPayload() {
+    return {
+      app: 'hoshikuzu-album',
+      version: this.version,
+      name: this.libraryName || '时光轴相册',
+      port: this.port,
+      lanIps: this.addresses().map((entry) => entry.address).slice(0, 8),
+      at: new Date().toISOString(),
+    };
+  }
+
+  broadcastTargets() {
+    const targets = new Set(['255.255.255.255']);
+    const interfaces = os.networkInterfaces();
+    for (const entries of Object.values(interfaces)) {
+      for (const entry of entries || []) {
+        if (!entry || entry.internal) continue;
+        if (entry.family !== 'IPv4' && entry.family !== 4) continue;
+        const address = String(entry.address || '');
+        const netmask = String(entry.netmask || '');
+        if (!/^\d+\.\d+\.\d+\.\d+$/.test(address)) continue;
+        if (!/^\d+\.\d+\.\d+\.\d+$/.test(netmask)) continue;
+        const ip = address.split('.').map(Number);
+        const mask = netmask.split('.').map(Number);
+        const broadcast = ip
+          .map((octet, index) => (octet & mask[index]) | (~mask[index] & 255))
+          .join('.');
+        targets.add(broadcast);
+        if (targets.size >= 8) return [...targets];
+      }
+    }
+    return [...targets];
+  }
+
+  startBeacon() {
+    if (this.beaconSocket || typeof dgram === 'undefined') return;
+    try {
+      const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+      this.beaconSocket = socket;
+      socket.on('error', () => this.stopBeacon());
+      socket.bind(() => {
+        try {
+          socket.setBroadcast(true);
+        } catch {
+          // Some adapters reject broadcast; the phone can still use QR/manual.
+        }
+        this.beaconTimer = setInterval(() => this.sendBeacon(), 3000);
+        if (this.beaconTimer.unref) this.beaconTimer.unref();
+        this.sendBeacon();
+      });
+    } catch {
+      this.stopBeacon();
+    }
+  }
+
+  sendBeacon() {
+    if (!this.beaconSocket || !this.server) return;
+    let payload;
+    try {
+      payload = Buffer.from(JSON.stringify(this.beaconPayload()), 'utf8');
+    } catch {
+      return;
+    }
+    for (const target of this.broadcastTargets()) {
+      try {
+        this.beaconSocket.send(payload, 0, payload.length, DISCOVERY_PORT, target, () => {});
+      } catch {
+        // Ignore a failed interface.
+      }
+    }
+  }
+
+  stopBeacon() {
+    if (this.beaconTimer) {
+      clearInterval(this.beaconTimer);
+      this.beaconTimer = null;
+    }
+    if (this.beaconSocket) {
+      try {
+        this.beaconSocket.close();
+      } catch {
+        // Already closed.
+      }
+      this.beaconSocket = null;
+    }
+  }
+
   async stop(options = {}) {
+    this.stopBeacon();
     if (this.heartbeat) {
       clearInterval(this.heartbeat);
       this.heartbeat = null;
@@ -969,6 +1074,11 @@ class MobileSyncService {
       return;
     }
 
+    if (req.method === 'POST' && pathname === '/api/mobile/upload') {
+      await this.handleUpload(req, res, url);
+      return;
+    }
+
     const mediaMatch = /^\/api\/mobile\/photos\/([^/]+)\/(thumb|original)$/.exec(pathname);
     if (req.method === 'GET' && mediaMatch) {
       this.sessionFor(req, res);
@@ -977,6 +1087,120 @@ class MobileSyncService {
     }
 
     this.sendJson(res, 404, { ok: false, error: 'Not found' });
+  }
+
+  async handleUpload(req, res, url) {
+    const root = this.getRoot ? this.getRoot() : null;
+    if (!root) {
+      this.sendJson(res, 503, { ok: false, error: '电脑端尚未连接存储库。' });
+      return;
+    }
+    if (typeof this.importReceived !== 'function') {
+      this.sendJson(res, 501, { ok: false, error: '当前版本不支持手机回传。' });
+      return;
+    }
+    const declared = Number(req.headers['content-length'] || 0);
+    if (!declared || declared <= 0) {
+      this.sendJson(res, 411, { ok: false, error: '缺少文件长度。' });
+      return;
+    }
+    if (declared > MAX_UPLOAD_BYTES) {
+      this.sendJson(res, 413, { ok: false, error: '单张照片超过 200MB 上限。' });
+      return;
+    }
+
+    const name = safeFileName(url.searchParams.get('name') || `phone-${Date.now()}.jpg`);
+    const tempDir = path.join(os.tmpdir(), `hoshikuzu-mobile-upload-${process.pid}`);
+    const tempPath = path.join(tempDir, `${crypto.randomUUID()}.bin`);
+    try {
+      await fsp.mkdir(tempDir, { recursive: true });
+      await this.streamUpload(req, tempPath, declared);
+    } catch (error) {
+      await fsp.rm(tempPath, { force: true }).catch(() => {});
+      this.sendJson(res, 400, {
+        ok: false,
+        error: error && error.message ? error.message : '手机上传失败。',
+      });
+      return;
+    }
+
+    // Serialize imports so two phones uploading at once cannot race the scan
+    // cache / album JSON write.
+    const task = this.uploadQueue.then(async () => {
+      try {
+        const maxEdge = this.getPreviewMaxEdge
+          ? await this.getPreviewMaxEdge(root)
+          : 1600;
+        const result = await this.importReceived(root, tempPath, name, maxEdge);
+        if (result && result.draft) {
+          // Let the renderer merge the draft into the album and persist it.
+          // The album SSE event is emitted by the normal save/notify path.
+          this.onImported(result.draft);
+        }
+        return result;
+      } finally {
+        await fsp.rm(tempPath, { force: true }).catch(() => {});
+      }
+    });
+    this.uploadQueue = task.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    try {
+      const result = await task;
+      this.sendJson(res, 200, {
+        ok: true,
+        duplicate: Boolean(result && result.duplicate),
+        hash: result ? result.hash : undefined,
+        draft: result && result.draft
+          ? {
+              id: result.draft.contentHash ? `photo_${result.draft.contentHash}` : undefined,
+              contentHash: result.draft.contentHash,
+              libraryPath: result.draft.libraryPath,
+              previewPath: result.draft.previewPath,
+            }
+          : undefined,
+      });
+    } catch (error) {
+      this.sendJson(res, 400, {
+        ok: false,
+        error: error && error.message ? error.message : '导入手机照片失败。',
+      });
+    }
+  }
+
+  streamUpload(req, tempPath, declared) {
+    return new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(tempPath);
+      let received = 0;
+      let settled = false;
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        output.destroy();
+        req.destroy();
+        reject(error);
+      };
+      req.on('data', (chunk) => {
+        received += chunk.length;
+        if (received > MAX_UPLOAD_BYTES) {
+          fail(new Error('上传超过 200MB 安全上限。'));
+        }
+      });
+      req.on('error', fail);
+      output.on('error', fail);
+      output.on('finish', () => {
+        if (settled) return;
+        if (received !== declared) {
+          fail(new Error('上传中断，文件不完整。'));
+          return;
+        }
+        settled = true;
+        resolve();
+      });
+      req.pipe(output);
+    });
   }
 
   async servePhoto(req, res, url, id, kind) {
@@ -1223,6 +1447,7 @@ class MobileSyncService {
 
 module.exports = {
   DEFAULT_PORT,
+  MAX_UPLOAD_BYTES,
   RECEIVE_MODES,
   MobileSyncService,
   buildMobileAlbum,

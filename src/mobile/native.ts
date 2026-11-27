@@ -21,6 +21,22 @@ export interface HoshikuzuAndroidBridge {
   openExternal?(url: string): void;
   httpRequest?(callbackId: string, requestJson: string): void;
   md5Hex?(base64: string): string;
+  /** Save / share / upload an original from the app-private mobile library. */
+  saveManaged?(callbackId: string, libraryPath: string, name: string): void;
+  shareManaged?(callbackId: string, libraryPathsJson: string): void;
+  uploadManaged?(callbackId: string, libraryPath: string, name: string): void;
+  /** Backup export / import through the Android document picker. */
+  exportText?(callbackId: string, name: string, text: string): void;
+  exportZip?(callbackId: string, name: string, albumJson: string): void;
+  importBackup?(callbackId: string): void;
+  /** Import images shared from another Android app into the local album. */
+  consumeSharedMedia?(callbackId: string, maxEdge: number, quality: number): void;
+  /** Push the latest "on this day" card data to the home-screen widget. */
+  updateOnThisDayWidget?(json: string): void;
+  /** Origin of the last paired desktop, or "" when not paired. */
+  desktopBaseUrl?(): string;
+  /** Post a system notification for a desktop cast. */
+  notifyCast?(photoId: string, title: string, body: string): void;
 }
 
 declare global {
@@ -28,6 +44,12 @@ declare global {
     HoshikuzuAndroid?: HoshikuzuAndroidBridge;
     /** Lets the APK's hardware back button close overlays before exiting. */
     __hoshikuzuHandleBack?: () => boolean;
+    /** Native result callback shared by save / share / upload actions. */
+    __hoshikuzuMobileActionResult?: (callbackId: string, json: string) => void;
+    /** Drafts imported from another app before React finished mounting. */
+    __hoshikuzuSharedDrafts?: unknown[];
+    /** Called by Android when a new share intent arrives. */
+    __hoshikuzuRequestSharedMedia?: () => void;
   }
 }
 

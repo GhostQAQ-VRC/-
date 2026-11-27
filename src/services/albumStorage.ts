@@ -18,6 +18,7 @@ import { getDesktopBridge, hydrateLibrarySources } from '../platform';
 import { createSamplePhotos } from '../data/photos';
 import { createSeedWorlds, findSeedWorld } from '../data/worlds';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../data/settings';
+import { normalizePlayerIds } from '../utils/players';
 
 export const STORAGE_KEY = 'hoshikuzu-album-v2';
 const LEGACY_STORAGE_KEY = 'hoshikuzu-album-v1';
@@ -162,10 +163,18 @@ export function sanitizePhoto(value: unknown, legacy = false): Photo | null {
         .map((tag) => tag.trim().slice(0, 24))
         .slice(0, 12)
     : undefined;
+  const userTags = Array.isArray(raw.tags)
+    ? raw.tags
+        .filter((tag): tag is string => typeof tag === 'string' && Boolean(tag.trim()))
+        .map((tag) => tag.trim().slice(0, 24))
+        .filter((tag, index, list) => list.indexOf(tag) === index)
+        .slice(0, 20)
+    : undefined;
   const rotation: PhotoRotation | undefined =
     raw.rotation === 90 || raw.rotation === 180 || raw.rotation === 270
       ? raw.rotation
       : undefined;
+  const playerIds = normalizePlayerIds(raw.playerIds);
   return {
     id: raw.id,
     src: raw.src,
@@ -211,6 +220,9 @@ export function sanitizePhoto(value: unknown, legacy = false): Photo | null {
     aiUpdatedAt: asString(raw.aiUpdatedAt),
     aiState,
     aiError: asString(raw.aiError)?.slice(0, 500),
+    tags: userTags && userTags.length ? userTags : undefined,
+    favorite: raw.favorite === true || undefined,
+    playerIds: playerIds.length ? playerIds : undefined,
   };
 }
 

@@ -7,6 +7,8 @@ const { readPngTextChunks } = require('./png-chunks.cjs');
 const WORLD_ID_STRICT =
   /wrld_[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 const WORLD_ID_LOOSE = /wrld_[0-9a-fA-F-]{20,}/;
+const USER_ID_STRICT =
+  /usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const INSTANCE_RE = /wrld_[0-9a-fA-F-]{20,}:[0-9]+[^\s"'<>,]*/;
 const DATE_RE =
   /(20\d{2})[-/:](0[1-9]|1[0-2])[-/:](0[1-9]|[12]\d|3[01])[T _-](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:?\d{2})?/;
@@ -184,6 +186,46 @@ function findTimestampInJson(json) {
   });
 }
 
+/**
+ * VRCX stores the players who were in the instance on the screenshot's
+ * Description JSON. Only IDs/display names are extracted; profile data and
+ * avatars are resolved later by the desktop player library.
+ */
+function findPlayersInJson(json) {
+  const players = [];
+  const seen = new Set();
+  searchObject(json, (key, value) => {
+    if (!/^(players|playerlist|playerslist)$/i.test(key) || !Array.isArray(value)) {
+      return undefined;
+    }
+    for (const item of value.slice(0, 64)) {
+      const rawId =
+        typeof item === 'string'
+          ? item
+          : item && typeof item === 'object'
+            ? item.id ?? item.userId ?? item.user_id
+            : '';
+      const match = typeof rawId === 'string' ? rawId.match(USER_ID_STRICT) : null;
+      if (!match) continue;
+      const id = match[0].toLowerCase();
+      if (seen.has(id)) continue;
+      const rawName =
+        item && typeof item === 'object'
+          ? item.displayName ?? item.name ?? item.username
+          : '';
+      const displayName =
+        typeof rawName === 'string' && rawName.trim()
+          ? decodeEntities(rawName.trim()).slice(0, 80)
+          : id.slice(0, 18);
+      seen.add(id);
+      players.push({ id, displayName });
+      if (players.length >= 32) break;
+    }
+    return players.length ? players : undefined;
+  });
+  return players;
+}
+
 function findNameInText(text) {
   if (!text) return undefined;
   const patterns = [
@@ -288,6 +330,7 @@ function analyzeText(input = {}) {
     worldId,
     worldName,
     worldInstanceId,
+    players: findPlayersInJson(json),
     alt: path.parse(fileName || 'photo').name || '存储库照片',
     diagnostics: {
       chunkKeys: input.chunkKeys || [],
@@ -366,7 +409,9 @@ async function readPhotoMetadata(filePath, options = {}) {
 module.exports = {
   WORLD_ID_STRICT,
   WORLD_ID_LOOSE,
+  USER_ID_STRICT,
   analyzeText,
+  findPlayersInJson,
   findWorldId,
   findWorldIdInJson,
   findWorldNameInJson,
